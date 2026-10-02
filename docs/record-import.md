@@ -22,25 +22,46 @@ Relevant pinned upstream definitions:
 
 ## CLI workflow
 
-Use absolute paths to a local database and to one file you have deliberately selected:
+Use the installed native `usage-lens` executable on PATH, or replace its name with
+the quoted absolute executable path. Release builds do not need Node.js. Database
+and import-file paths must be absolute and deliberately selected. These examples
+use POSIX-shell quoting:
 
 ```sh
-node dist/cli/main.js source --db /absolute/path/usage.sqlite --source rollout-local --mode imported --name 'Local rollout records'
+usage-lens source --db '/absolute/path/usage.sqlite' --source rollout-local --mode imported --name 'Local rollout records'
 
-node dist/cli/main.js import-rollout \
-  --db /absolute/path/usage.sqlite \
+usage-lens import-rollout \
+  --db '/absolute/path/usage.sqlite' \
   --source rollout-local \
-  --file /absolute/path/selected-rollout.jsonl \
+  --file '/absolute/path/selected-rollout.jsonl' \
   --source-version a75987455a2879ca151cea5e118fa307be868583
 ```
 
 Content capture is off by default. If you deliberately want local review of available plain user messages, visible assistant messages, and generic tool arguments/results, enable it **before** importing:
 
 ```sh
-node dist/cli/main.js settings --db /absolute/path/usage.sqlite --content true
+usage-lens settings --db '/absolute/path/usage.sqlite' --content true
 ```
 
 This increases what is retained locally. Secret redaction is best-effort. Aggregate, HTTP summary, and plugin methods do not expose this content; only the separate local detail surface can return it.
+
+For Windows PowerShell, use the call operator when invoking a quoted executable path.
+The following are the equivalent setup and import commands; replace the literal
+placeholder paths. Run the settings command only if you deliberately choose content
+capture before importing:
+
+```powershell
+& 'C:\ABSOLUTE\usage-lens.exe' source --db 'C:\ABSOLUTE\usage.sqlite' --source rollout-local --mode imported --name 'Local rollout records'
+# Optional local content opt-in:
+& 'C:\ABSOLUTE\usage-lens.exe' settings --db 'C:\ABSOLUTE\usage.sqlite' --content true
+& 'C:\ABSOLUTE\usage-lens.exe' import-rollout --db 'C:\ABSOLUTE\usage.sqlite' --source rollout-local --file 'C:\ABSOLUTE\selected-rollout.jsonl' --source-version a75987455a2879ca151cea5e118fa307be868583
+```
+
+POSIX and PowerShell single-quoted paths prevent variable/command expansion and keep
+spaces within one argument. If a real path contains a single quote, use that shell's
+escaping rules instead of substituting it verbatim. When invoking from code, prefer
+a subprocess argument vector without a shell; do not include quote characters in
+individual arguments. Never insert imported record fields into a shell command.
 
 The identical file is imported once per source. Re-importing after enabling content capture does **not** backfill earlier events. Re-importing after deleting local content does **not** restore it. To deliberately import the same file under a different capture scope, create a new explicit source, understanding that this is a separate namespace and its counts overlap. Turning capture off does not delete previously retained content; use the existing explicit confirmed local-content deletion operation if that is what you want.
 
@@ -84,12 +105,16 @@ Every `skills`-namespace output body is excluded from retained generic tool resu
 - Without preceding session metadata, tool identities are deliberately file-scoped and produce a warning. Missing `session_meta.session_id` can fall back to that metadata's thread ID for upstream compatibility; missing token-record session IDs never receive this fallback
 - Copied files with changed bytes, inherited/forked histories, and missing stable IDs can still overlap. Counts represent observed evidence within their declared source, not universal invocation counts or guaranteed complete history
 
-Parser hard limits are 8 MiB total bytes, 256 KiB per line, 20,000 physical lines, nesting depth 32, 1,000 projected events, and 1,000 response-token records. Callers can tighten these limits but cannot raise them. The core also caps the combined normalized import payload at 2 MiB, so a file under the parser's byte limit can still be rejected atomically by storage. Splitting a file without preserving identity context can defeat deduplication and is not an automatic workaround.
+Parser input limits are 8 MiB of source-file bytes, 256 KiB per line, 20,000 physical lines, JSON nesting depth 32, 1,000 projected events, and 1,000 response-token records. Callers can tighten these limits but cannot raise them.
+
+The parser and store also share a projected-batch preflight: the combined normalized import payload is limited to 2 MiB and 100,000 JSON nodes across the batch, with at most 1,000 events and 512 KiB per event's local content. The total cap still applies when every individual content object fits its own limit. The 8 MiB source-file allowance is not an 8 MiB retained-content allowance.
+
+Projected content depth is measured from each event's content-object root, without counting the surrounding import wrapper. For example, tool arguments with 29–31 nested arrays fit the depth limit when the other budgets permit; 32 nested argument arrays plus the content wrapper do not. Exceeding a projected budget produces the safe `rollout_projection_limit` error before storage. The same file may fit with content capture disabled because its projection is smaller. Splitting a file without preserving identity context can defeat deduplication and is not an automatic workaround.
 
 Invalid UTF-8, malformed JSON, invalid envelopes, unsupported source declarations, invalid required fields, identity conflicts, and exceeded limits stop the whole import before any batch is committed. A complete valid final JSON line without a newline is accepted with a warning. A truncated final record is rejected. Unknown record types are skipped with an explicit coverage warning. Errors and persisted warning codes contain no imported bodies or embedded paths.
 
 ## Pure adapter API and verification
 
-`parseRollout(stringOrBytes, {sourceId, observedAt, captureContent, sourceVersion, limits?})` returns normalized `events`, `responseTokens`, `fingerprint`, source/adapter versions, human-readable `warnings`, safe fixed `warningCodes`, and `recordsSeen`. It does not read or write files. The caller supplies the bounded bytes and passes the entire result to the core's atomic import operation.
+`usage_lens::adapters::rollout::parse_rollout(bytes: &[u8], options: &serde_json::Value) -> Result<serde_json::Value, AdapterError>` accepts the camelCase options `sourceId`, `observedAt`, `captureContent`, `sourceVersion`, and optional `limits`. On success it returns normalized `events`, `responseTokens`, `fingerprint`, source/adapter versions, human-readable `warnings`, safe fixed `warningCodes`, and `recordsSeen`. It does not read or write files. The caller supplies bounded bytes, then passes the parser's `sourceId`, `fingerprint`, `adapterVersion`, `sourceVersion`, `warningCodes`, `events`, and `responseTokens` to `UsageStore::import_rollout`, adding `importedAt` from the same caller-supplied `observedAt`. Presentation-only fields such as `warnings` and `recordsSeen` are not storage inputs; the native CLI performs this mapping.
 
-`tests/adapters/rollout.test.ts` uses synthetic in-memory JSONL to cover exact skill proof, false mentions, catalog exclusion, pagination, typed injection alignment, failures, malformed payloads, output ordering, duplicate/conflicting identities, unsafe integers, cumulative exclusions, content opt-in, unknown records, truncation, and all bounds. Its core integration case verifies fingerprint idempotence and separate skill evidence categories.
+`crates/usage-lens/tests/rollout.rs` uses synthetic in-memory JSONL to cover exact skill proof, false mentions, catalog exclusion, pagination, typed injection alignment, failures, malformed payloads, output ordering, duplicate/conflicting identities, unsafe integers, cumulative exclusions, content opt-in, unknown records, truncation, and all bounds. Its core integration case verifies fingerprint idempotence and separate skill evidence categories.

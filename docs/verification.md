@@ -45,3 +45,11 @@ The rollout importer targets the explicitly declared public source contract docu
 The account collector uses documented read methods, but the actual user's installed executable, account permissions, method availability and startup behavior have not been exercised. A live read must be initiated and reviewed locally by the user. The query plugin never starts that collector implicitly.
 
 Tests and demos never execute a model turn. No statement here should be interpreted as complete account-wide usage, complete skill history, exact per-skill cost, or a billing reconciliation.
+
+## Review-fix validation checkpoint
+
+The follow-up local gate on 2026-10-02 passed 167 Rust tests and 58 Python build/gate/plugin tests, plus formatting, native/WASM Clippy and fresh builds. Coverage was 5853/6149 (95.1862%) total and 5518/5778 (95.5002%) changed against the initial PR base. The follow-up patch itself measured 90/90 (100%) changed executable lines against commit `9c63bb0d1c1ed5764578b754a4c4e84c9147378e`. The same 216 unmeasured browser bridge lines remained uncovered, with no missing source records.
+
+Separately, 38 release-tool Python tests, official MCP SDK parity, E2E TypeScript checking and whitespace checks passed. Recorded test/build inputs were unchanged during the gate. Review fixes cover common cloud/registry credential names, native plugin installation examples, shared bounded rollout/store preflight, and explicit readiness synchronization for a fake subprocess fixture that raced on Intel Mac. The documented total import budget remains enforced; content is never silently truncated to make an oversized import fit.
+
+Actual browser evidence on `9c63bb0d1c1ed5764578b754a4c4e84c9147378e` passed all six desktop/390px/320px tests; see [design verification](design.md). That commit passed all four native package jobs but failed the Intel-Mac timing fixture subsequently corrected above. The follow-up still requires exact-head remote CI before merge and release.

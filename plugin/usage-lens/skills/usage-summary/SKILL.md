@@ -12,13 +12,16 @@ refresh collection. Start with usage_status and select the user's intended sourc
 Never merge sources or interpret a demo source as the user's real account.
 
 If the user has already configured local execution and provides the exact built CLI
-location and local database, the same aggregate queries are available via:
+location and local database, these native aggregate queries are available. The examples
+below use POSIX-shell quoting; see the plugin README for Windows PowerShell and
+argument-vector setup. No Node.js launcher is used:
 
-- node /ABSOLUTE/usage-lens/dist/cli/main.js status --db /ABSOLUTE/usage.sqlite
-- node /ABSOLUTE/usage-lens/dist/cli/main.js overview --db /ABSOLUTE/usage.sqlite --source SOURCE
-- node /ABSOLUTE/usage-lens/dist/cli/main.js daily --db /ABSOLUTE/usage.sqlite --source SOURCE --from YYYY-MM-DD --to YYYY-MM-DD
-- node /ABSOLUTE/usage-lens/dist/cli/main.js quota --db /ABSOLUTE/usage.sqlite --source SOURCE
-- node /ABSOLUTE/usage-lens/dist/cli/main.js tools --db /ABSOLUTE/usage.sqlite --source SOURCE
+- '/ABSOLUTE/usage-lens' status --db '/ABSOLUTE/usage.sqlite'
+- '/ABSOLUTE/usage-lens' overview --db '/ABSOLUTE/usage.sqlite' --source SOURCE
+- '/ABSOLUTE/usage-lens' daily --db '/ABSOLUTE/usage.sqlite' --source SOURCE --from YYYY-MM-DD --to YYYY-MM-DD
+- '/ABSOLUTE/usage-lens' quota --db '/ABSOLUTE/usage.sqlite' --source SOURCE
+- '/ABSOLUTE/usage-lens' tools --db '/ABSOLUTE/usage.sqlite' --source SOURCE
+- '/ABSOLUTE/usage-lens' response-tokens --db '/ABSOLUTE/usage.sqlite' --source SOURCE
 
 Use a subprocess argument vector without a shell where possible; otherwise correctly
 quote each user-supplied path. Do not guess paths, inspect local transcripts, collect

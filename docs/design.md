@@ -37,3 +37,20 @@ Imported sources have an additional factual response-token region in Overview. I
 Local rendered QA has not passed. The available browser could not open the loopback dashboard. The explicitly authorized project Playwright workflow then stopped before any page loaded because its Chromium executable was missing. Installing the official browser with Playwright 1.63.0 into a separate writable cache failed: both Chromium and Chromium Headless Shell v1243 (153.0.8010.12) downloads from `cdn.playwright.dev` returned HTTP 200 with `Content-Type: text/html`, 195 bytes, containing “Site Unavailable / Unable to access this site.” Consequently archive extraction reported “End of central directory record signature not found.” No executable or rendered screenshot was produced, and no alternate download host or existing browser profile was used.
 
 This is an environment/download prerequisite failure, not an observed application defect. Non-browser checks and the independently configured CI browser workflow are separate evidence. Visual fidelity, actual layout at 1440/390/320px, browser console health and browser interaction checks must be confirmed from a successful browser run before being reported as verified. The accepted concept and synthetic-only Playwright screenshot assertions are ready for that comparison.
+
+## CI rendered verification (2026-10-02)
+
+GitHub CI on commit `9c63bb0d1c1ed5764578b754a4c4e84c9147378e` passed all six Playwright tests at 1440×1000, 390×844, and 320×720. The earlier mobile document-overflow failure was corrected by positioning the table scroll container so its absolute screen-reader header remains inside that container. The table retains its own horizontal scrolling; document-level overflow checks were not removed or relaxed.
+
+Full-page English/light and Chinese/dark screenshots were inspected, including 320px and 390px views. The tested flows include navigation, filtering/reset, accessible event detail and Escape, cancelled deletion, theme/language persistence through reload, console errors and unexpected external requests. This is Chromium viewport emulation, not a physical Android/iPhone or Safari test.
+
+Visual comparison with the retained design reference:
+
+1. Desktop retains the white navigation rail, cool working canvas, blue active state and utility header
+2. Heading, source selector and amber synthetic-data notice remain above the summary metrics
+3. Desktop chart/quota columns become stacked, readable cards on small screens
+4. Metrics remain exact text with clear scope/unknown labels; no visual-reference counts are used as fallbacks
+5. Activity stays in a bounded scrollable table, while the page itself fits the tested viewport
+6. Dark Chinese screenshots preserve the same hierarchy and visible controls; provider/model names and supplied provenance text remain source data
+
+Intentional deviations remain the functional source selector and explicit provenance/imported-response regions described above. Subsequent functional changes must rerun browser CI before release; the screenshot evidence is tied to the commit named here.

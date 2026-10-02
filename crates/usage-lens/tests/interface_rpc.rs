@@ -1,7 +1,10 @@
 #![cfg(unix)]
 use serde_json::json;
 use std::process::Stdio;
-use tokio::process::Command;
+use tokio::{
+    io::AsyncReadExt,
+    process::{Child, Command},
+};
 use usage_lens::{
     adapters::{
         AdapterError,
@@ -17,16 +20,18 @@ fn limits() -> TransportLimits {
         ..TransportLimits::default()
     }
 }
-fn peer(script: &str, limits: TransportLimits) -> ReadOnlyAppServer {
-    let child = Command::new("python3")
+fn peer_child(script: &str) -> Child {
+    Command::new("python3")
         .args(["-u", "-c", script])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-        .unwrap();
-    ReadOnlyAppServer::from_child(child, limits).unwrap()
+        .unwrap()
+}
+fn peer(script: &str, limits: TransportLimits) -> ReadOnlyAppServer {
+    ReadOnlyAppServer::from_child(peer_child(script), limits).unwrap()
 }
 const ECHO: &str = r#"import sys,json
 for line in sys.stdin:
@@ -338,8 +343,25 @@ async fn lifetime_deadline_also_applies_between_requests() {
 
 #[tokio::test]
 async fn peer_closed_stdin_blank_frames_and_closed_store_errors_are_safe() {
-    let mut client = peer("import os,time;os.close(0);time.sleep(1)", limits());
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let mut child =
+        peer_child("import os,signal;os.close(0);os.write(1,b'stdin-closed\\n');signal.pause()");
+    // Start the transport deadline only after the peer proves its read end is closed.
+    // Reading exactly this acknowledgment leaves the RPC stream untouched. The peer
+    // then waits for our explicit close/kill instead of racing a fixed sleep interval.
+    let mut acknowledgment = [0u8; 13];
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        child
+            .stdout
+            .as_mut()
+            .unwrap()
+            .read_exact(&mut acknowledgment),
+    )
+    .await
+    .expect("fake peer must acknowledge readiness within the bounded startup window")
+    .expect("fake peer readiness pipe must be readable");
+    assert_eq!(&acknowledgment, b"stdin-closed\n");
+    let mut client = ReadOnlyAppServer::from_child(child, limits()).unwrap();
     let error = client.initialize().await.unwrap_err();
     assert_eq!(error.0, "subprocess_error");
     client.close().await;

@@ -1,5 +1,5 @@
 {
-  "description": "Optional future local events; replace absolute paths and explicitly configure only after reviewing local-content settings.",
+  "description": "Inert POSIX-shell example for optional future local events; replace absolute native-executable/database paths and explicitly configure only after reviewing local-content settings. Windows shell quoting is documented in the plugin README.",
   "hooks": {
     "PostToolUse": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/ABSOLUTE/usage-lens/dist/cli/main.js\" hook --db \"/ABSOLUTE/usage.sqlite\" --source local-hooks",
+            "command": "'/ABSOLUTE/usage-lens' hook --db '/ABSOLUTE/usage.sqlite' --source local-hooks",
             "async": true,
             "timeout": 10
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/ABSOLUTE/usage-lens/dist/cli/main.js\" hook --db \"/ABSOLUTE/usage.sqlite\" --source local-hooks",
+            "command": "'/ABSOLUTE/usage-lens' hook --db '/ABSOLUTE/usage.sqlite' --source local-hooks",
             "async": true,
             "timeout": 10
           }
@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"/ABSOLUTE/usage-lens/dist/cli/main.js\" hook --db \"/ABSOLUTE/usage.sqlite\" --source local-hooks",
+            "command": "'/ABSOLUTE/usage-lens' hook --db '/ABSOLUTE/usage.sqlite' --source local-hooks",
             "async": true,
             "timeout": 10
           }

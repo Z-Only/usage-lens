@@ -221,13 +221,36 @@ pub(crate) fn decimal_integer(input: &str, max_digits: usize) -> Option<String> 
     Some(result)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SizeContext {
+    Plain,
+    Import,
+    Events,
+    Event,
+}
+
 pub fn check_size(value: &Value, max_bytes: usize) -> CoreResult<()> {
+    check_size_in_context(value, max_bytes, SizeContext::Plain)
+}
+
+/// Event content has its own depth root, but shares the entire batch's byte/node budget.
+pub fn check_event_batch_size(value: &Value, max_bytes: usize) -> CoreResult<()> {
+    check_size_in_context(value, max_bytes, SizeContext::Events)
+}
+
+/// Only the documented events[].content path resets depth. No bytes or nodes are excluded.
+pub fn check_import_size(value: &Value, max_bytes: usize) -> CoreResult<()> {
+    check_size_in_context(value, max_bytes, SizeContext::Import)
+}
+
+fn check_size_in_context(value: &Value, max_bytes: usize, context: SizeContext) -> CoreResult<()> {
     fn visit(
         value: &Value,
         depth: usize,
         nodes: &mut usize,
         size: &mut usize,
         max: usize,
+        context: SizeContext,
     ) -> CoreResult<()> {
         *nodes += 1;
         if depth > 32 || *nodes > 100_000 {
@@ -241,13 +264,23 @@ pub fn check_size(value: &Value, max_bytes: usize) -> CoreResult<()> {
             Value::Array(items) => {
                 for (index, item) in items.iter().enumerate() {
                     *size = size.saturating_add(index.to_string().len() + 4);
-                    visit(item, depth + 1, nodes, size, max)?;
+                    let context = if context == SizeContext::Events {
+                        SizeContext::Event
+                    } else {
+                        SizeContext::Plain
+                    };
+                    visit(item, depth + 1, nodes, size, max, context)?;
                 }
             }
             Value::Object(items) => {
                 for (key, item) in items {
                     *size = size.saturating_add(key.len() + 4);
-                    visit(item, depth + 1, nodes, size, max)?;
+                    let (depth, context) = match (context, key.as_str()) {
+                        (SizeContext::Import, "events") => (depth + 1, SizeContext::Events),
+                        (SizeContext::Event, "content") => (0, SizeContext::Plain),
+                        _ => (depth + 1, SizeContext::Plain),
+                    };
+                    visit(item, depth, nodes, size, max, context)?;
                 }
             }
         }
@@ -257,7 +290,65 @@ pub fn check_size(value: &Value, max_bytes: usize) -> CoreResult<()> {
             Ok(())
         }
     }
-    visit(value, 0, &mut 0, &mut 0, max_bytes)
+    visit(value, 0, &mut 0, &mut 0, max_bytes, context)
+}
+
+/// Construct and bound the exact rollout-to-store projection before any persistence.
+/// Both the parser and the store use this preflight, including intermediate bundle/batch shapes.
+/// The whole-input byte/node check precedes any batch cloning; content stays in that budget.
+pub fn preflight_rollout_import(input: &Value) -> CoreResult<Value> {
+    exact_keys(
+        input,
+        &[
+            "sourceId",
+            "fingerprint",
+            "sourceVersion",
+            "adapterVersion",
+            "importedAt",
+            "warningCodes",
+            "events",
+            "responseTokens",
+        ],
+    )?;
+    check_import_size(input, RAW_BYTES)?;
+    let strip = |name: &str| -> CoreResult<Vec<Value>> {
+        let rows = input[name].as_array().ok_or(CoreError::InvalidInput)?;
+        if rows.len() > BATCH_EVENTS {
+            return Err(CoreError::InvalidInput);
+        }
+        rows.iter()
+            .map(|value| {
+                let fields = record(value)?;
+                if value["sourceId"] != input["sourceId"] {
+                    return Err(CoreError::InvalidInput);
+                }
+                if name == "events"
+                    && let Some(content) = fields.get("content")
+                {
+                    check_size(content, CONTENT_BYTES)?;
+                }
+                let mut value = value.clone();
+                value
+                    .as_object_mut()
+                    .expect("validated record")
+                    .remove("sourceId");
+                Ok(value)
+            })
+            .collect()
+    };
+    // The store injects sourceId back into these events before ingest_events.
+    check_event_batch_size(&input["events"], RAW_BYTES)?;
+    let batch = serde_json::json!({
+        "sourceId":input["sourceId"], "observations":[], "events":strip("events")?,
+        "responseTokens":strip("responseTokens")?,
+        "importMetadata":{
+            "fingerprint":input["fingerprint"], "sourceVersion":input["sourceVersion"],
+            "adapterVersion":input["adapterVersion"], "importedAt":input["importedAt"],
+            "warningCodes":input["warningCodes"],
+        },
+    });
+    check_import_size(&batch, RAW_BYTES)?;
+    Ok(batch)
 }
 
 pub fn date_range(from: &Value, to: &Value) -> CoreResult<(String, String)> {

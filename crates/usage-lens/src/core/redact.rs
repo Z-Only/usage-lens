@@ -11,7 +11,7 @@ pub const CONTENT_WARNING: &str = "Local content redaction is best-effort; unkno
 
 static SECRET_KEYS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-    r"(?i)\A(?:authorization|proxy-authorization|cookie|set-cookie|password|passwd|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|private[_-]?key|token|authToken|sessionToken|credential|credentials|.*[_-](?:secret|token|api[_-]?key|password))\z"
+    r"(?i)\A(?:authorization|proxy-authorization|cookie|set-cookie|password|passwd|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|private[_-]?key|token|authToken|sessionToken|credential|credentials|.*[_-](?:secret|token|api[_-]?key|password|private[_-]?key|auth[_-]?config)|.*secret[_-]?access[_-]?key)\z"
 ).unwrap()
 });
 static EXCLUDED_KEYS: LazyLock<Regex> = LazyLock::new(|| {
@@ -25,7 +25,8 @@ static TEXT_RULES: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
     (Regex::new(r"(?s)-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----").unwrap(), "[REDACTED_PRIVATE_KEY]"),
     (Regex::new(r"\b(?:sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16})\b").unwrap(), "[REDACTED_KEY]"),
     (Regex::new(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b").unwrap(), "[REDACTED_TOKEN]"),
-    (Regex::new(r#"(?i)("(?:[^"\\]*[_-])?(?:password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|authToken|sessionToken|token|cookie|authorization)"\s*:\s*)"(?:[^"\\]|\\.)*""#).unwrap(), "${1}\"[REDACTED]\""),
+    (Regex::new(r#"(?i)("(?:[^"\\]*[_-])?(?:password|passwd|secret|secret[_-]?access[_-]?key|private[_-]?key|auth[_-]?config|api[_-]?key|access[_-]?token|refresh[_-]?token|authToken|sessionToken|token|cookie|authorization)"\s*:\s*)"(?:[^"\\]|\\.)*""#).unwrap(), "${1}\"[REDACTED]\""),
+    (Regex::new(r"(?im)\b((?:AWS_SECRET_ACCESS_KEY|GCP_PRIVATE_KEY|DOCKER_AUTH_CONFIG)\s*[=:]\s*).*$").unwrap(), "${1}[REDACTED]"),
     (Regex::new(r"(?i)\b(Bearer\s+)[A-Za-z0-9._~+/-]+=*").unwrap(), "${1}[REDACTED]"),
     (Regex::new(r"(?i)\b((?:[A-Z][A-Z0-9_]*_API_KEY|api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[=:]\s*)[^\s,;]+").unwrap(), "${1}[REDACTED]"),
     (Regex::new(r"(?im)^(\s*(?:cookie|set-cookie|authorization)\s*:\s*).*$").unwrap(), "${1}[REDACTED]"),

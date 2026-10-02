@@ -769,7 +769,19 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
                 .1
         })
         .collect();
-    Ok(
-        json!({"sourceId":source,"fingerprint":fingerprint,"adapterVersion":ROLLOUT_ADAPTER_VERSION,"sourceVersion":ROLLOUT_SOURCE_VERSION,"events":events,"responseTokens":tokens,"warnings":warning_texts,"warningCodes":warnings,"recordsSeen":records_seen}),
-    )
+    let mut projection = json!({"sourceId":source,"fingerprint":fingerprint,
+        "adapterVersion":ROLLOUT_ADAPTER_VERSION,"sourceVersion":ROLLOUT_SOURCE_VERSION,
+        "importedAt":observed_at,"warningCodes":warnings});
+    // Move potentially large content into the projection, then bound it before making batch copies.
+    projection["events"] = Value::Array(events);
+    projection["responseTokens"] = Value::Array(tokens);
+    validation::preflight_rollout_import(&projection)
+        .map_err(|_| AdapterError("rollout_projection_limit"))?;
+    projection
+        .as_object_mut()
+        .expect("constructed projection")
+        .remove("importedAt");
+    projection["warnings"] = json!(warning_texts);
+    projection["recordsSeen"] = json!(records_seen);
+    Ok(projection)
 }

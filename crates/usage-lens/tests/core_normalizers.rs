@@ -540,3 +540,36 @@ fn serialized_nesting_limit_cannot_fall_back_to_opaque_sensitive_text() {
     assert_eq!(parsed["body"], "[]{} \"");
     assert_eq!(parsed["path"], "a\\b");
 }
+
+#[test]
+fn common_cloud_and_registry_credentials_are_redacted_in_all_local_surfaces() {
+    for key in [
+        "aws_secret_access_key",
+        "AWS_SECRET_ACCESS_KEY",
+        "gcp_private_key",
+        "DOCKER_AUTH_CONFIG",
+    ] {
+        let value = json!({key:"SYNTHETIC_CREDENTIAL_CANARY"});
+        let output = sanitize_content(&json!({"toolArguments":value,"toolResult":value.to_string(),"files":[{"name":"synthetic.json","content":value.to_string()}]})).unwrap();
+        assert!(
+            !output.to_string().contains("SYNTHETIC_CREDENTIAL_CANARY"),
+            "key {key}"
+        );
+    }
+    for key in [
+        "AWS_SECRET_ACCESS_KEY",
+        "GCP_PRIVATE_KEY",
+        "DOCKER_AUTH_CONFIG",
+    ] {
+        let line =
+            format!("export {key}=\"SYNTHETIC_CREDENTIAL_CANARY with spaces\"\nSAFE_SETTING=true");
+        let output = sanitize_content(&json!({"body":line})).unwrap();
+        assert!(!output.to_string().contains("SYNTHETIC_CREDENTIAL_CANARY"));
+        assert!(!output.to_string().contains("with spaces"));
+        assert!(output.to_string().contains("SAFE_SETTING=true"));
+        let output = redact_text(&format!(
+            "command output: {key}: SYNTHETIC_CREDENTIAL_CANARY"
+        ));
+        assert!(!output.contains("SYNTHETIC_CREDENTIAL_CANARY"));
+    }
+}

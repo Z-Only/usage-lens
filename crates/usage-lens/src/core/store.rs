@@ -492,7 +492,7 @@ impl UsageStore {
     pub fn ingest_events(&self, inputs: &Value) -> CoreResult<Value> {
         let inputs_array = inputs.as_array().ok_or_else(|| error("invalid_input"))?;
         require(inputs_array.len() <= 1000)?;
-        check_size(inputs, 2 * 1024 * 1024)?;
+        check_event_batch_size(inputs, RAW_BYTES)?;
         self.write(|| {self.capture_allowed()?;let prepared=inputs_array.iter().map(|v|self.prepare_event(v)).collect::<CoreResult<Vec<_>>>()?;let mut results=Vec::new();
             for (event,content,warnings) in prepared {
                 let existing:Option<String>=safe(self.db()?.query_row("SELECT event_id FROM events WHERE source_id=? AND (event_id=? OR (? IS NOT NULL AND source_event_id=? AND event_type=?)) LIMIT 1",params![s(&event["sourceId"]),s(&event["eventId"]),optional(&event["sourceEventId"]),optional(&event["sourceEventId"]),s(&event["eventType"])],|r|r.get(0)).optional())?;
@@ -532,7 +532,7 @@ impl UsageStore {
             .as_array()
             .ok_or_else(|| error("invalid_input"))?;
         require(obs.len() <= 100 && events.len() <= 1000)?;
-        check_size(input, 2 * 1024 * 1024)?;
+        check_import_size(input, RAW_BYTES)?;
         let empty = vec![];
         let tokens = match input.get("responseTokens") {
             None | Some(Value::Null) => &empty,
@@ -560,37 +560,7 @@ impl UsageStore {
             if input.get("responseTokens").is_some()||metadata.is_some(){result["responseTokensInserted"]=json!(responses_inserted.to_string());result["importAlreadyPresent"]=json!(false);} Ok(result)})
     }
     pub fn import_rollout(&self, input: &Value) -> CoreResult<Value> {
-        exact_keys(
-            input,
-            &[
-                "sourceId",
-                "fingerprint",
-                "sourceVersion",
-                "adapterVersion",
-                "importedAt",
-                "warningCodes",
-                "events",
-                "responseTokens",
-            ],
-        )?;
-        check_size(input, 2 * 1024 * 1024)?;
-        let strip = |name: &str| -> CoreResult<Vec<Value>> {
-            let rows = input[name]
-                .as_array()
-                .ok_or_else(|| error("invalid_input"))?;
-            require(rows.len() <= 1000)?;
-            rows.iter()
-                .map(|v| {
-                    require(v.is_object() && v["sourceId"] == input["sourceId"])?;
-                    let mut v = v.clone();
-                    v.as_object_mut()
-                        .ok_or_else(|| error("invalid_input"))?
-                        .remove("sourceId");
-                    Ok(v)
-                })
-                .collect()
-        };
-        self.import_data(&json!({"sourceId":input["sourceId"],"observations":[],"events":strip("events")?,"responseTokens":strip("responseTokens")?,"importMetadata":{"fingerprint":input["fingerprint"],"sourceVersion":input["sourceVersion"],"adapterVersion":input["adapterVersion"],"importedAt":input["importedAt"],"warningCodes":input["warningCodes"]}}))
+        self.import_data(&preflight_rollout_import(input)?)
     }
     pub fn get_local_event_detail(&self, input: &Value) -> CoreResult<Value> {
         self.read(|| self.get_local_event_detail_impl(input))
