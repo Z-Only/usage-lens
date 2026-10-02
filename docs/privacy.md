@@ -6,9 +6,32 @@ Usage Lens is designed for local inspection of explicitly connected usage source
 
 - **Collection:** an explicitly started local collector reads supported provider responses or receives supported local lifecycle events. It does not discover arbitrary files on the computer or automatically request new account permissions.
 - **Local inspection:** the loopback dashboard reads the local database. Available message bodies, tool arguments/results, and supplied file contents can be retained only when content capture is enabled. File content means content present in an explicitly supplied record, not a request to crawl the filesystem.
-- **Plugin queries:** the read-only query interface returns allowlisted usage statistics. It must not expose message bodies, tool arguments/results, file contents, arbitrary SQL, or an arbitrary file-reading endpoint. A user who requests these summaries through a remote assistant is sharing the returned summary with that assistant.
+- **Conversational queries:** Skill + local CLI is the default; explicitly opted-in MCP is optional. Both query interfaces return allowlisted usage statistics. It must not expose message bodies, tool arguments/results, file contents, arbitrary SQL, or an arbitrary file-reading endpoint. A user who requests these summaries through a remote assistant is sharing the returned summary with that assistant.
 
-The dashboard, collector, and plugin must report their source and coverage. A local hook does not cover cloud-orchestrated Work, an absent skill event is not proof of zero use, and account-wide token totals cannot establish an individual skill's cost.
+The dashboard, collector, and conversational query interfaces must report their source and coverage. A local hook does not cover cloud-orchestrated Work, an absent skill event is not proof of zero use, and account-wide token totals cannot establish an individual skill's cost.
+
+## Skill + CLI does not grant access
+
+Installing the Skill adds instructions, not execution permissions, collection,
+automatic database discovery, or a background service. The user supplies the exact
+native executable, existing database path, and intended source. A missing store or
+failed query must remain an error, not trigger collection or demo substitution.
+The query Skill allows only `status`, `overview`, `daily`, `quota`, `tools`, `skill-summary`,
+and `response-tokens`; broader local commands stay outside that workflow.
+`skill-summary` shares only aggregate counts/coverage, equivalent to MCP
+`usage_skills`. The local `skills` command exposes individual evidence records and
+must not be called through this Skill or used as an aggregate fallback. This
+instruction boundary is not an OS sandbox for a client with general shell access.
+Persisted query commands use a read-only SQLite connection and require a current
+schema-2 rollback-journal store. They never create a missing database or migrate an
+old schema. Errors intentionally omit database paths and contents. A failed query
+must not trigger SQLite/PRAGMA commands or writable setup through the Skill.
+
+Local execution does not make the assistant's answer local: returned aggregates
+are shared with its provider. Do not upload the database or pass raw content to an
+assistant. MCP is never activated automatically and needs explicit opt-in and
+separate client setup. Installing a Skill on a cloud surface does not make files,
+local stdio, or loopback ports on the user's computer accessible there.
 
 ## Content capture
 

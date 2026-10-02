@@ -1,15 +1,15 @@
 {
   "name": "usage-lens",
-  "version": "0.1.0",
-  "description": "Read-only local usage aggregates with explicit coverage and freshness",
+  "version": "0.1.1",
+  "description": "Skill + local CLI for read-only usage aggregates; optional MCP",
   "author": {
     "name": "Local developer"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "Usage Lens",
-    "shortDescription": "Query local usage evidence",
-    "longDescription": "Query already-collected local activity, quota windows, tools and direct skill evidence. Local stdio setup is separate; real ChatGPT client integration is unverified.",
+    "shortDescription": "Query usage with Skill + CLI",
+    "longDescription": "Query already-collected local activity, quota windows, tools, response tokens and direct skill evidence through the configured native CLI. MCP is optional and separately opted in; real-client integration is unverified.",
     "developerName": "Local developer",
     "category": "Productivity",
     "capabilities": [],

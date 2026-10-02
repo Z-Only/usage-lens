@@ -40,6 +40,23 @@ for line in sys.stdin:
   print(json.dumps({'id':m['id'],'result':{'method':m['method'],'params':m.get('params')}}),flush=True)
 "#;
 #[tokio::test]
+async fn app_server_client_identification_tracks_package_version() {
+    let script = r#"import sys,json
+info=None
+for line in sys.stdin:
+ m=json.loads(line)
+ if m['method']=='initialize': info=m['params']['clientInfo']
+ if 'id' in m: print(json.dumps({'id':m['id'],'result':info}),flush=True)
+"#;
+    let mut client = peer(script, limits());
+    client.initialize().await.unwrap();
+    assert_eq!(
+        client.read_account().await.unwrap(),
+        json!({"name":"usage_lens","title":"Usage Lens","version":env!("CARGO_PKG_VERSION")})
+    );
+    client.close().await;
+}
+#[tokio::test]
 async fn fixed_read_methods_handshake_and_close() {
     let mut client = peer(ECHO, limits());
     assert_eq!(client.read_usage().await.unwrap_err().0, "not_initialized");

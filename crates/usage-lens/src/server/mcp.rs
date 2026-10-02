@@ -145,7 +145,7 @@ impl McpSession {
                 } else {
                     "2025-11-25"
                 };
-                json!({"protocolVersion":version,"capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"usage-lens","version":"0.1.0"},"instructions":INSTRUCTIONS})
+                json!({"protocolVersion":version,"capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"usage-lens","version":env!("CARGO_PKG_VERSION")},"instructions":INSTRUCTIONS})
             }
             "ping" => json!({}),
             _ if !self.initialized => return Some(error(id, -32000, "Server not initialized")),
@@ -163,8 +163,14 @@ impl McpSession {
                         json!({"jsonrpc":"2.0","id":id,"result":{"isError":true,"content":[{"type":"text","text":"invalid_tool_arguments"}]}}),
                     );
                 }
-                let value=match name {
-                    "usage_status"=>store.get_status(),"usage_overview"=>store.get_overview(&args),"usage_daily"=>store.get_daily_usage(&args),"usage_quota"=>store.get_quota(&args),"usage_tools"=>store.get_tool_usage(&args),"usage_response_tokens"=>store.get_response_token_usage(&args),_=>store.get_overview(&args).map(|v|json!({"source":v["source"],"skills":v["events"]["skills"],"coverage":v["events"]["coverage"],"warnings":v["warnings"]})),
+                let value = match name {
+                    "usage_status" => store.get_status(),
+                    "usage_overview" => store.get_overview(&args),
+                    "usage_daily" => store.get_daily_usage(&args),
+                    "usage_quota" => store.get_quota(&args),
+                    "usage_tools" => store.get_tool_usage(&args),
+                    "usage_response_tokens" => store.get_response_token_usage(&args),
+                    _ => store.get_skill_summary(&args),
                 };
                 match value {
                     Ok(value) => json!({"content":[{"type":"text","text":value.to_string()}]}),

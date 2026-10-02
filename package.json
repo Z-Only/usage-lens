@@ -1,6 +1,6 @@
 {
   "name": "usage-lens",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Browser and official MCP compatibility test tooling for the native Rust/Leptos Usage Lens application.",
   "license": "MIT",

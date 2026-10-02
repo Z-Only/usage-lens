@@ -10,10 +10,10 @@ use super::{
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, SecondsFormat, Utc};
 use num_bigint::BigUint;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use std::{cell::Cell, collections::BTreeSet, path::Path};
+use std::{cell::Cell, collections::BTreeSet, io::Read, path::Path};
 
 type RecordFilter = (Value, Option<String>, Option<String>, Option<String>);
 
@@ -74,6 +74,11 @@ fn require(yes: bool) -> CoreResult<()> {
 fn safe<T>(value: rusqlite::Result<T>) -> CoreResult<T> {
     value.map_err(|_| error("storage_error"))
 }
+fn database_path(path: &Path) -> CoreResult<&str> {
+    let text = path.to_str().ok_or_else(|| error("invalid_input"))?;
+    require(!text.is_empty() && text.len() <= 4096 && !text.contains('\0'))?;
+    Ok(text)
+}
 fn parse(text: String) -> CoreResult<Value> {
     serde_json::from_str(&text).map_err(|_| error("storage_error"))
 }
@@ -114,6 +119,50 @@ impl UsageStore {
     pub fn open(path: impl AsRef<Path>) -> CoreResult<Self> {
         Self::open_internal(path.as_ref(), None)
     }
+    /// Opens an existing current-schema store without initialization or migration.
+    /// Usage Lens uses rollback journaling. Reject externally WAL-converted files
+    /// before SQLite can create sidecars; external concurrent journal-mode changes
+    /// are unsupported. Keep normal locking so concurrent Usage Lens writes remain safe.
+    pub fn open_read_only(path: impl AsRef<Path>) -> CoreResult<Self> {
+        let path = path.as_ref();
+        require(database_path(path)? != ":memory:")?;
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NONBLOCK);
+        }
+        let mut file = options.open(path).map_err(|_| error("storage_error"))?;
+        if !file
+            .metadata()
+            .map_err(|_| error("storage_error"))?
+            .is_file()
+        {
+            return Err(error("storage_error"));
+        }
+        let mut header = [0; 20];
+        file.read_exact(&mut header)
+            .map_err(|_| error("storage_error"))?;
+        if &header[..16] != b"SQLite format 3\0" || header[18..20] != [1, 1] {
+            return Err(error("storage_error"));
+        }
+        let db = safe(Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        ))?;
+        safe(db.execute_batch(
+            "PRAGMA query_only=ON; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=2000;",
+        ))?;
+        let version: i64 = safe(db.query_row("PRAGMA user_version", [], |row| row.get(0)))?;
+        if version != 2 {
+            return Err(error("unsupported_schema"));
+        }
+        Ok(Self {
+            db: Some(db),
+            clock_ms: Cell::new(None),
+        })
+    }
     pub fn in_memory() -> CoreResult<Self> {
         Self::open(":memory:")
     }
@@ -127,8 +176,7 @@ impl UsageStore {
         Ok(())
     }
     fn open_internal(path: &Path, clock_ms: Option<i64>) -> CoreResult<Self> {
-        let path_text = path.to_str().ok_or_else(|| error("invalid_input"))?;
-        require(!path_text.is_empty() && path_text.len() <= 4096 && !path_text.contains('\0'))?;
+        let path_text = database_path(path)?;
         let existed = path.exists();
         let db = safe(Connection::open(path))?;
         #[cfg(unix)]
@@ -817,6 +865,16 @@ impl UsageStore {
     }
     pub fn get_overview(&self, input: &Value) -> CoreResult<Value> {
         self.read(|| self.get_overview_impl(input))
+    }
+    /// Aggregate-only skill evidence for remote-assistant query surfaces.
+    pub fn get_skill_summary(&self, input: &Value) -> CoreResult<Value> {
+        let overview = self.get_overview(input)?;
+        Ok(json!({
+            "source":overview["source"],
+            "skills":overview["events"]["skills"],
+            "coverage":overview["events"]["coverage"],
+            "warnings":overview["warnings"]
+        }))
     }
     fn get_overview_impl(&self, input: &Value) -> CoreResult<Value> {
         let (source, max_age) = self.query_source(input, &[])?;

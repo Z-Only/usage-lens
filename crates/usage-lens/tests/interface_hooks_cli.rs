@@ -127,7 +127,10 @@ fn parser_limits_flags_and_version_sanitization() {
 }
 #[tokio::test]
 async fn cli_queries_help_settings_and_confirmation_guards() {
-    assert_eq!(cli(&["--help"], b"").await.0, 0);
+    let (code, help, err) = cli(&["--help"], b"").await;
+    assert_eq!(code, 0);
+    assert!(err.is_empty());
+    assert!(help.starts_with(&format!("Usage Lens {} —", env!("CARGO_PKG_VERSION"))));
     for command in [
         "status",
         "overview",
@@ -135,6 +138,7 @@ async fn cli_queries_help_settings_and_confirmation_guards() {
         "history",
         "events",
         "skills",
+        "skill-summary",
         "tools",
         "response-tokens",
         "settings",

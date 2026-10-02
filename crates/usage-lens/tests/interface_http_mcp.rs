@@ -276,9 +276,11 @@ fn initialize(session: &mut mcp::McpSession, store: &UsageStore) -> Value {
 fn mcp_exact_allowlist_aggregates_only_and_safe_failures() {
     let store = demo();
     let mut session = mcp::McpSession::default();
+    let initialized = initialize(&mut session, &store);
+    assert_eq!(initialized["result"]["serverInfo"]["name"], "usage-lens");
     assert_eq!(
-        initialize(&mut session, &store)["result"]["serverInfo"]["name"],
-        "usage-lens"
+        initialized["result"]["serverInfo"]["version"],
+        env!("CARGO_PKG_VERSION")
     );
     let list = session
         .handle(
