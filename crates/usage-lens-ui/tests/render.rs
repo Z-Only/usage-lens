@@ -490,3 +490,33 @@ fn configured_source_fetch_failure_is_not_a_missing_source() {
     assert!(html.contains("read_failed"));
     assert!(!html.contains("No local source configured"));
 }
+#[test]
+fn scrollable_tables_contain_accessible_labels_without_hiding_page_content() {
+    let css = include_str!("../public/styles.css");
+    let table_rule = css
+        .split(".table-scroll {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(table_rule.contains("position: relative"));
+    assert!(table_rule.contains("overflow-x: auto"));
+    let body_rule = css
+        .split("body {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(!body_rule.contains("overflow"));
+    let quota_unit_rule = css
+        .split(".quota-value small {")
+        .nth(1)
+        .unwrap()
+        .split('}')
+        .next()
+        .unwrap();
+    assert!(quota_unit_rule.contains("margin-inline-start: 0.35em"));
+    assert!(render(full()).contains("<span class=\"sr-only\">Details</span>"));
+}

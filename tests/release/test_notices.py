@@ -1,6 +1,8 @@
 """Synthetic license-evidence checks; no network, accounts, or production data."""
 import hashlib
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -9,7 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts/release"))
 from build import verify_macos_minimum
-from notices import check_expression, license_documents, reachable, read_override
+from notices import check_expression, license_documents, reachable, read_override, write_notice_bundle
 
 
 class NoticeTests(unittest.TestCase):
@@ -30,11 +32,14 @@ class NoticeTests(unittest.TestCase):
                 check_expression(expression)
 
     def test_existing_upstream_text_is_preserved(self):
-        text = "Synthetic full license text\n\n"
-        (self.root / "LICENSE").write_text(text)
-        docs = license_documents(self.package, {}, self.overrides)
-        self.assertEqual(docs[0]["text"], text)
-        self.assertEqual(docs[0]["sha256"], hashlib.sha256(text.encode()).hexdigest())
+        for newline in ("\n", "\r\n"):
+            with self.subTest(newline=repr(newline)):
+                text = f"Synthetic full license text{newline}{newline}"
+                data = text.encode("utf-8")
+                (self.root / "LICENSE").write_bytes(data)
+                docs = license_documents(self.package, {}, self.overrides)
+                self.assertEqual(docs[0]["text"], text)
+                self.assertEqual(docs[0]["sha256"], hashlib.sha256(data).hexdigest())
 
     def test_missing_text_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "Missing upstream license"):
@@ -83,6 +88,55 @@ class NoticeTests(unittest.TestCase):
             self.assertEqual(result[name]["usageKinds"], ["build/proc-macro"])
         with self.assertRaises(ValueError):
             reachable(m, "absent")
+
+    def test_all_checked_in_notice_snapshots_match_pinned_bytes(self):
+        directory = Path(__file__).resolve().parents[2] / "scripts/release/licenses"
+        overrides = json.loads((directory / "overrides.json").read_bytes())
+        checked = set()
+        for key, record in overrides.items():
+            snapshots = record["standardTexts"] + [{"file": record["metadataFile"], "sha256": record["metadataSha256"]}] if record.get("kind") == "reviewed-spdx-declaration" else [record]
+            for snapshot in snapshots:
+                with self.subTest(package=key, file=snapshot["file"]):
+                    read_override(directory, snapshot)
+                    checked.add(snapshot["file"])
+        self.assertTrue(checked)
+
+    def test_generated_notice_bundle_preserves_mixed_upstream_newlines(self):
+        path = self.root / "THIRD_PARTY_LICENSES.txt"
+        sections = ["Bundle heading\n", "Upstream LF text\n\n", "Upstream CRLF text\r\n\r\n", "Bundle footer\n"]
+        write_notice_bundle(path, sections)
+        self.assertEqual(path.read_bytes(), b"Bundle heading\nUpstream LF text\n\nUpstream CRLF text\r\n\r\nBundle footer\n")
+
+    def test_git_autocrlf_checkout_preserves_vendored_notice_bytes(self):
+        repository = self.root / "checkout"
+        repository.mkdir()
+        environment = {**os.environ, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
+        # Exercise actual Git checkout conversion without touching user/repo config.
+        def git(*args):
+            return subprocess.run(["git", "-c", "core.autocrlf=true", "-c", "core.safecrlf=false", *args], cwd=repository, env=environment, check=True, capture_output=True).stdout
+        git("-c", "init.templateDir=", "init", "--quiet")
+        attributes = Path(__file__).resolve().parents[2] / ".gitattributes"
+        (repository / ".gitattributes").write_bytes(attributes.read_bytes())
+        snapshots = {
+            "scripts/release/licenses/synthetic-lf.txt": b"Synthetic LF notice\n\n",
+            "scripts/release/licenses/synthetic-crlf.txt": b"Synthetic CRLF notice\r\n\r\n",
+            "scripts/release/licenses/nested/synthetic-Cargo.toml.orig": b'[package]\nlicense = "MIT"\n',
+        }
+        for name, data in snapshots.items():
+            file = repository / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(data)
+        (repository / "normal.txt").write_bytes(b"Git conversion control\n")
+        git("add", "--", ".gitattributes", "normal.txt", *snapshots)
+        for name, data in snapshots.items():
+            self.assertEqual(git("show", f":{name}"), data, f"Git index changed {name}")
+            (repository / name).unlink()
+        (repository / "normal.txt").unlink()
+        git("checkout-index", "--all", "--force")
+        self.assertEqual((repository / "normal.txt").read_bytes(), b"Git conversion control\r\n", "Control must prove autocrlf was active")
+        for name, data in snapshots.items():
+            with self.subTest(file=name):
+                self.assertEqual((repository / name).read_bytes(), data)
 
     def test_macos_minimum_only_reads_relevant_load_commands(self):
         verify_macos_minimum("Load command 1\n cmd LC_BUILD_VERSION\n minos 11.0\n sdk 15.0\nLoad command 2\n cmd LC_SOURCE_VERSION\n version 0.0\n")

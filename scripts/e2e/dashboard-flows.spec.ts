@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { captureOverflowDiagnostics } from "./layout-diagnostics";
 
 // Read-only against the shared synthetic server. Every browser context has its own UI preferences.
 test("local evidence flows, keyboard detail, locale and theme stay usable", async ({
@@ -13,11 +14,16 @@ test("local evidence flows, keyboard detail, locale and theme stay usable", asyn
       externalRequests.push(request.url());
   });
   const noOverflow = async () => {
-    await expect
-      .poll(() =>
-        page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-      )
-      .toBe(true);
+    try {
+      await expect
+        .poll(() =>
+          page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        )
+        .toBe(true);
+    } catch (error) {
+      await captureOverflowDiagnostics(page, testInfo);
+      throw error;
+    }
   };
   await page.goto("/");
   await expect(
@@ -31,6 +37,14 @@ test("local evidence flows, keyboard detail, locale and theme stay usable", asyn
   ).toBeVisible();
   await expect(page.locator("vite-error-overlay")).toHaveCount(0);
   await noOverflow();
+  const activityTable = page.getByLabel("Recorded activity table", { exact: true });
+  await expect(activityTable).toHaveCSS("overflow-x", "auto");
+  await expect(activityTable.locator("thead .sr-only")).toHaveText("Details");
+  expect(
+    await activityTable.locator("thead .sr-only").evaluate((label) =>
+      (label as HTMLElement).offsetParent === label.closest(".table-scroll"),
+    ),
+  ).toBe(true);
   await page.screenshot({
     path: testInfo.outputPath("overview-en-light.png"),
     fullPage: true,

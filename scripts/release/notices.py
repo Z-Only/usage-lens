@@ -115,6 +115,12 @@ def read_override(directory, record):
     return data
 
 
+def write_notice_bundle(path, sections):
+    # Preserve upstream LF/CRLF bytes on every host; text-mode Windows writes
+    # would convert LF to CRLF and can double existing CRLF sequences.
+    path.write_bytes("".join(sections).encode("utf-8"))
+
+
 def collect(root, target, output):
     graphs = []
     for triple, name in [(TARGETS[target]["rustTarget"], "usage-lens"), ("wasm32-unknown-unknown", "usage-lens-ui")]:
@@ -148,7 +154,7 @@ def collect(root, target, output):
             sqlite = Path(package["manifest_path"]).parent / "sqlite3/sqlite3.c"
     if sqlite is None:
         raise ValueError("Expected bundled SQLite source for its public-domain notice")
-    sqlite_source = sqlite.read_text()
+    sqlite_source = sqlite.read_bytes().decode("utf-8")
     match = re.search(r"/\*\n\*\* 2001 September 15.*?\*/", sqlite_source, re.S)
     if not match or "disclaims copyright" not in match.group(0).lower():
         raise ValueError("Bundled SQLite public-domain notice was not found")
@@ -161,11 +167,11 @@ def collect(root, target, output):
     # Preserve the complete official standard-library notice bundle. It includes
     # upstream runtime components such as compiler builtins, allocator and musl.
     for file in sorted((rust_docs / "licenses").glob("*.txt")):
-        text.append(f"\n{'=' * 72}\nRust toolchain license text: {file.name}\n{file.read_text()}\n")
+        text.append(f"\n{'=' * 72}\nRust toolchain license text: {file.name}\n{file.read_bytes().decode('utf-8')}\n")
     rust_version = subprocess.check_output(["rustc", "--version"], text=True).strip()
     wasm_version = subprocess.check_output(["wasm-bindgen", "--version"], text=True).strip()
     output.mkdir(parents=True, exist_ok=True)
-    (output / "THIRD_PARTY_LICENSES.txt").write_text("".join(text), encoding="utf-8")
+    write_notice_bundle(output / "THIRD_PARTY_LICENSES.txt", text)
     (output / "RUST_STANDARD_LIBRARY_NOTICES.html").write_bytes(copyright_file.read_bytes())
     index = {"schemaVersion": 1, "platform": target, "cargoLockSha256": hashlib.sha256((root / "Cargo.lock").read_bytes()).hexdigest(), "toolchain": rust_version, "wasmBindgen": wasm_version, "components": records, "sqliteNotice": "THIRD_PARTY_LICENSES.txt", "rustStandardLibraryNotices": "RUST_STANDARD_LIBRARY_NOTICES.html"}
     (output / "THIRD_PARTY_COMPONENTS.json").write_bytes(json_bytes(index))

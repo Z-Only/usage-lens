@@ -591,6 +591,7 @@ select {
   white-space: nowrap;
 }
 .quota-value small {
+  margin-inline-start: 0.35em;
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
@@ -623,6 +624,8 @@ progress::-moz-progress-bar {
   margin-top: 18px;
 }
 .table-scroll {
+  /* Keep absolutely positioned accessible labels inside this scrollport. */
+  position: relative;
   overflow-x: auto;
   max-width: 100%;
   scrollbar-width: thin;
