@@ -1,0 +1,42 @@
+{
+  "description": "Inert POSIX-shell example for optional future local events; replace absolute native-executable/database paths and explicitly configure only after reviewing local-content settings. Windows shell quoting is documented in the plugin README.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/ABSOLUTE/usage-lens' hook --db '/ABSOLUTE/usage.sqlite' --source local-hooks",
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/ABSOLUTE/usage-lens' hook --db '/ABSOLUTE/usage.sqlite' --source local-hooks",
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/ABSOLUTE/usage-lens' hook --db '/ABSOLUTE/usage.sqlite' --source local-hooks",
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

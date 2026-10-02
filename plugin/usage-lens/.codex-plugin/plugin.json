@@ -1,0 +1,18 @@
+{
+  "name": "usage-lens",
+  "version": "0.1.0",
+  "description": "Read-only local usage aggregates with explicit coverage and freshness",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Usage Lens",
+    "shortDescription": "Query local usage evidence",
+    "longDescription": "Query already-collected local activity, quota windows, tools and direct skill evidence. Local stdio setup is separate; real ChatGPT client integration is unverified.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Summarize my collected usage with its source, freshness and coverage gaps."
+  }
+}
