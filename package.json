@@ -1,0 +1,38 @@
+{
+  "name": "usage-lens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser and official MCP compatibility test tooling for the native Rust/Leptos Usage Lens application.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "node": ">=24.18.0 <25",
+    "bun": ">=1.4.2 <2"
+  },
+  "scripts": {
+    "dev": "python3 scripts/build_ui.py && cargo run --locked -p usage-lens -- serve --demo --port 4319",
+    "dev:server": "cargo run --locked -p usage-lens -- serve --demo --port 4319",
+    "build": "python3 scripts/build_ui.py && cargo build --locked -p usage-lens",
+    "build:server": "cargo build --locked -p usage-lens",
+    "build:ui": "python3 scripts/build_ui.py",
+    "start": "cargo run --locked -p usage-lens --",
+    "typecheck": "cargo check --locked --workspace --all-targets --features usage-lens-ui/ssr && cargo check --locked -p usage-lens-ui --lib --target wasm32-unknown-unknown --no-default-features --features csr",
+    "lint": "python3 scripts/check_static.py && cargo fmt --all --check && cargo clippy --locked --workspace --all-targets --features usage-lens-ui/ssr -- -D warnings",
+    "test": "cargo test --locked --workspace --all-targets --features usage-lens-ui/ssr",
+    "test:coverage": "cargo llvm-cov --locked --workspace --all-targets --features usage-lens-ui/ssr --lcov --output-path coverage/rust/lcov.info",
+    "test:e2e": "node node_modules/@playwright/test/cli.js test",
+    "test:gate": "python3 -m unittest discover -s scripts -p 'test_*.py'",
+    "check:static": "python3 scripts/check_static.py",
+    "ci-gate": "bash scripts/ci_gate.sh",
+    "build:release": "python3 scripts/build_ui.py && cargo build --locked --release -p usage-lens",
+    "typecheck:tests": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.e2e.json",
+    "test:mcp": "node --test tests/server/mcp-native.test.mjs"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.31.0",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.19.1",
+    "typescript": "6.0.3"
+  }
+}

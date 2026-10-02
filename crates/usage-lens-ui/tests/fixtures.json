@@ -1,0 +1,900 @@
+{
+  "coverage": {
+    "completeness": "partial",
+    "missingEvents": "unknown",
+    "preCollectionHistory": "unknown",
+    "tokenAttribution": "not_provided"
+  },
+  "detail": {
+    "event": {
+      "eventId": "event-1",
+      "sourceId": "demo",
+      "eventType": "tool_call",
+      "evidenceType": "explicit_tool_call",
+      "observedAt": "2026-10-02T00:00:00Z",
+      "occurredAt": null,
+      "sourceEventId": null,
+      "collectorVersion": "test",
+      "model": null,
+      "toolName": "read_file",
+      "skillName": null,
+      "skillVersion": null,
+      "sessionId": null,
+      "turnId": null,
+      "status": "unknown",
+      "durationMs": null,
+      "reasoningEffort": null,
+      "retryOfEventId": null,
+      "confidence": "direct",
+      "coverage": "partial"
+    },
+    "contentRetained": true,
+    "content": {
+      "body": "<img src=x onerror=alert(1)> local secret-free demo",
+      "toolArguments": {
+        "file": "example.csv"
+      },
+      "files": [
+        {
+          "name": "example.csv",
+          "content": "hello"
+        }
+      ]
+    },
+    "warnings": [
+      "Best-effort redaction"
+    ]
+  },
+  "event": {
+    "eventId": "event-1",
+    "sourceId": "demo",
+    "eventType": "tool_call",
+    "evidenceType": "explicit_tool_call",
+    "observedAt": "2026-10-02T00:00:00Z",
+    "occurredAt": null,
+    "sourceEventId": null,
+    "collectorVersion": "test",
+    "model": null,
+    "toolName": "read_file",
+    "skillName": null,
+    "skillVersion": null,
+    "sessionId": null,
+    "turnId": null,
+    "status": "unknown",
+    "durationMs": null,
+    "reasoningEffort": null,
+    "retryOfEventId": null,
+    "confidence": "direct",
+    "coverage": "partial"
+  },
+  "events": {
+    "source": {
+      "id": "demo",
+      "displayName": "Synthetic local demo",
+      "mode": "demo",
+      "provider": "synthetic",
+      "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+      "accountBinding": "unverified_local_namespace",
+      "createdAt": "2026-10-02T00:00:00Z"
+    },
+    "events": [
+      {
+        "eventId": "event-1",
+        "sourceId": "demo",
+        "eventType": "tool_call",
+        "evidenceType": "explicit_tool_call",
+        "observedAt": "2026-10-02T00:00:00Z",
+        "occurredAt": null,
+        "sourceEventId": null,
+        "collectorVersion": "test",
+        "model": null,
+        "toolName": "read_file",
+        "skillName": null,
+        "skillVersion": null,
+        "sessionId": null,
+        "turnId": null,
+        "status": "unknown",
+        "durationMs": null,
+        "reasoningEffort": null,
+        "retryOfEventId": null,
+        "confidence": "direct",
+        "coverage": "partial"
+      },
+      {
+        "eventId": "event-2",
+        "sourceId": "demo",
+        "eventType": "tool_call",
+        "evidenceType": "explicit_tool_call",
+        "observedAt": "2026-10-02T00:00:00Z",
+        "occurredAt": "2026-10-01T12:00:00Z",
+        "sourceEventId": null,
+        "collectorVersion": "test",
+        "model": "demo-model",
+        "toolName": "read_file",
+        "skillName": null,
+        "skillVersion": null,
+        "sessionId": null,
+        "turnId": null,
+        "status": "unknown",
+        "durationMs": null,
+        "reasoningEffort": null,
+        "retryOfEventId": null,
+        "confidence": "direct",
+        "coverage": "partial"
+      }
+    ],
+    "nextCursor": null,
+    "coverage": {
+      "completeness": "partial",
+      "missingEvents": "unknown",
+      "preCollectionHistory": "unknown",
+      "tokenAttribution": "not_provided"
+    },
+    "warnings": []
+  },
+  "history": {
+    "source": {
+      "id": "demo",
+      "displayName": "Synthetic local demo",
+      "mode": "demo",
+      "provider": "synthetic",
+      "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+      "accountBinding": "unverified_local_namespace",
+      "createdAt": "2026-10-02T00:00:00Z"
+    },
+    "observations": [
+      {
+        "status": "available",
+        "data": {
+          "buckets": [
+            {
+              "bucketKey": "plan",
+              "sourceView": "multi",
+              "status": "reported",
+              "limitId": {
+                "status": "reported",
+                "value": "plan"
+              },
+              "keyMatchesLimitId": true,
+              "limitName": {
+                "status": "reported",
+                "value": "Demo plan"
+              },
+              "normalModelSlug": {
+                "status": "not_reported",
+                "value": null
+              },
+              "primary": {
+                "status": "reported",
+                "value": {
+                  "usedPercent": {
+                    "status": "reported",
+                    "value": 0
+                  },
+                  "windowDurationMins": {
+                    "status": "reported",
+                    "value": "300"
+                  },
+                  "resetsAt": {
+                    "status": "reported",
+                    "value": "1790900000"
+                  }
+                }
+              },
+              "secondary": {
+                "status": "reported",
+                "value": {
+                  "usedPercent": {
+                    "status": "reported",
+                    "value": 62
+                  },
+                  "windowDurationMins": {
+                    "status": "reported",
+                    "value": "10080"
+                  },
+                  "resetsAt": {
+                    "status": "not_reported",
+                    "value": null
+                  }
+                }
+              },
+              "credits": {
+                "status": "not_reported",
+                "value": null
+              },
+              "planType": {
+                "status": "reported",
+                "value": "pro"
+              },
+              "rateLimitReachedType": {
+                "status": "not_reported",
+                "value": null
+              },
+              "spendControlReached": {
+                "status": "reported",
+                "value": false
+              }
+            }
+          ],
+          "bucketView": "multi",
+          "multiBucketState": "reported",
+          "legacyBucketState": "omitted",
+          "ordinaryUsageAllowed": {
+            "status": "reported",
+            "value": true
+          },
+          "rateLimitResetCredits": {
+            "status": "not_reported",
+            "value": null
+          },
+          "coverage": {
+            "completeness": "unknown",
+            "exactRemainingTokens": "not_provided",
+            "affordability": "not_inferred"
+          }
+        },
+        "provenance": {
+          "provider": "codex_app_server",
+          "method": "account/usage/read",
+          "adapterVersion": "test",
+          "mode": "demo",
+          "schemaBaseline": "test",
+          "sourceId": "demo"
+        },
+        "freshness": {
+          "observedAt": "2026-10-02T00:00:00Z",
+          "sourceAsOf": null,
+          "sourceAsOfStatus": "not_provided",
+          "ageMs": 0,
+          "stale": false,
+          "maxAgeMs": 60000
+        },
+        "lastFailure": null,
+        "warnings": []
+      }
+    ],
+    "nextCursor": null,
+    "coverage": {
+      "completeness": "unknown",
+      "betweenSamples": "unknown"
+    },
+    "warnings": []
+  },
+  "overview": {
+    "source": {
+      "id": "demo",
+      "displayName": "Synthetic local demo",
+      "mode": "demo",
+      "provider": "synthetic",
+      "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+      "accountBinding": "unverified_local_namespace",
+      "createdAt": "2026-10-02T00:00:00Z"
+    },
+    "account": {
+      "status": "unavailable",
+      "data": null,
+      "reason": "not_collected",
+      "lastFailure": null,
+      "warnings": []
+    },
+    "usage": {
+      "status": "available",
+      "data": {
+        "summaryState": "reported",
+        "summary": {
+          "lifetimeTokens": {
+            "status": "reported",
+            "value": "9007199254740993123456"
+          },
+          "peakDailyTokens": {
+            "status": "reported",
+            "value": "100"
+          },
+          "longestRunningTurnSec": {
+            "status": "not_reported",
+            "value": null
+          },
+          "currentStreakDays": {
+            "status": "reported",
+            "value": "0"
+          },
+          "longestStreakDays": {
+            "status": "reported",
+            "value": "8"
+          }
+        },
+        "dailyUsageBuckets": {
+          "status": "reported",
+          "value": [
+            {
+              "startDate": {
+                "status": "reported",
+                "value": "2026-10-01"
+              },
+              "tokens": {
+                "status": "reported",
+                "value": "0"
+              },
+              "sourceTimezone": null,
+              "timezoneStatus": "not_documented",
+              "model": null
+            },
+            {
+              "startDate": {
+                "status": "reported",
+                "value": "2026-10-02"
+              },
+              "tokens": {
+                "status": "reported",
+                "value": "100"
+              },
+              "sourceTimezone": null,
+              "timezoneStatus": "not_documented",
+              "model": null
+            },
+            {
+              "startDate": {
+                "status": "reported",
+                "value": "2026-10-03"
+              },
+              "tokens": {
+                "status": "not_reported",
+                "value": null
+              },
+              "sourceTimezone": null,
+              "timezoneStatus": "not_documented",
+              "model": null
+            }
+          ]
+        },
+        "semantics": "account_token_activity",
+        "coverage": {
+          "completeness": "unknown",
+          "missingDays": "unknown",
+          "perModel": "not_provided",
+          "exactRemainingTokens": "not_provided"
+        }
+      },
+      "provenance": {
+        "provider": "codex_app_server",
+        "method": "account/usage/read",
+        "adapterVersion": "test",
+        "mode": "demo",
+        "schemaBaseline": "test",
+        "sourceId": "demo"
+      },
+      "freshness": {
+        "observedAt": "2026-10-02T00:00:00Z",
+        "sourceAsOf": null,
+        "sourceAsOfStatus": "not_provided",
+        "ageMs": 0,
+        "stale": false,
+        "maxAgeMs": 60000
+      },
+      "lastFailure": null,
+      "warnings": []
+    },
+    "quota": {
+      "status": "available",
+      "data": {
+        "buckets": [
+          {
+            "bucketKey": "plan",
+            "sourceView": "multi",
+            "status": "reported",
+            "limitId": {
+              "status": "reported",
+              "value": "plan"
+            },
+            "keyMatchesLimitId": true,
+            "limitName": {
+              "status": "reported",
+              "value": "Demo plan"
+            },
+            "normalModelSlug": {
+              "status": "not_reported",
+              "value": null
+            },
+            "primary": {
+              "status": "reported",
+              "value": {
+                "usedPercent": {
+                  "status": "reported",
+                  "value": 0
+                },
+                "windowDurationMins": {
+                  "status": "reported",
+                  "value": "300"
+                },
+                "resetsAt": {
+                  "status": "reported",
+                  "value": "1790900000"
+                }
+              }
+            },
+            "secondary": {
+              "status": "reported",
+              "value": {
+                "usedPercent": {
+                  "status": "reported",
+                  "value": 62
+                },
+                "windowDurationMins": {
+                  "status": "reported",
+                  "value": "10080"
+                },
+                "resetsAt": {
+                  "status": "not_reported",
+                  "value": null
+                }
+              }
+            },
+            "credits": {
+              "status": "not_reported",
+              "value": null
+            },
+            "planType": {
+              "status": "reported",
+              "value": "pro"
+            },
+            "rateLimitReachedType": {
+              "status": "not_reported",
+              "value": null
+            },
+            "spendControlReached": {
+              "status": "reported",
+              "value": false
+            }
+          }
+        ],
+        "bucketView": "multi",
+        "multiBucketState": "reported",
+        "legacyBucketState": "omitted",
+        "ordinaryUsageAllowed": {
+          "status": "reported",
+          "value": true
+        },
+        "rateLimitResetCredits": {
+          "status": "not_reported",
+          "value": null
+        },
+        "coverage": {
+          "completeness": "unknown",
+          "exactRemainingTokens": "not_provided",
+          "affordability": "not_inferred"
+        }
+      },
+      "provenance": {
+        "provider": "codex_app_server",
+        "method": "account/usage/read",
+        "adapterVersion": "test",
+        "mode": "demo",
+        "schemaBaseline": "test",
+        "sourceId": "demo"
+      },
+      "freshness": {
+        "observedAt": "2026-10-02T00:00:00Z",
+        "sourceAsOf": null,
+        "sourceAsOfStatus": "not_provided",
+        "ageMs": 0,
+        "stale": false,
+        "maxAgeMs": 60000
+      },
+      "lastFailure": null,
+      "warnings": []
+    },
+    "events": {
+      "total": "2",
+      "byType": [
+        {
+          "name": "tool_call",
+          "count": "2"
+        }
+      ],
+      "byModel": [
+        {
+          "name": "demo-model",
+          "count": "1"
+        }
+      ],
+      "tools": [
+        {
+          "name": "read_file",
+          "count": "2"
+        }
+      ],
+      "skills": [
+        {
+          "kind": "requested",
+          "name": "spreadsheets",
+          "count": "2"
+        },
+        {
+          "kind": "loaded",
+          "name": "spreadsheets",
+          "count": "1"
+        }
+      ],
+      "unknownModelCount": "1",
+      "coverage": {
+        "completeness": "partial",
+        "missingEvents": "unknown",
+        "preCollectionHistory": "unknown",
+        "tokenAttribution": "not_provided"
+      }
+    },
+    "warnings": [
+      "partial source"
+    ]
+  },
+  "quota": {
+    "buckets": [
+      {
+        "bucketKey": "plan",
+        "sourceView": "multi",
+        "status": "reported",
+        "limitId": {
+          "status": "reported",
+          "value": "plan"
+        },
+        "keyMatchesLimitId": true,
+        "limitName": {
+          "status": "reported",
+          "value": "Demo plan"
+        },
+        "normalModelSlug": {
+          "status": "not_reported",
+          "value": null
+        },
+        "primary": {
+          "status": "reported",
+          "value": {
+            "usedPercent": {
+              "status": "reported",
+              "value": 0
+            },
+            "windowDurationMins": {
+              "status": "reported",
+              "value": "300"
+            },
+            "resetsAt": {
+              "status": "reported",
+              "value": "1790900000"
+            }
+          }
+        },
+        "secondary": {
+          "status": "reported",
+          "value": {
+            "usedPercent": {
+              "status": "reported",
+              "value": 62
+            },
+            "windowDurationMins": {
+              "status": "reported",
+              "value": "10080"
+            },
+            "resetsAt": {
+              "status": "not_reported",
+              "value": null
+            }
+          }
+        },
+        "credits": {
+          "status": "not_reported",
+          "value": null
+        },
+        "planType": {
+          "status": "reported",
+          "value": "pro"
+        },
+        "rateLimitReachedType": {
+          "status": "not_reported",
+          "value": null
+        },
+        "spendControlReached": {
+          "status": "reported",
+          "value": false
+        }
+      }
+    ],
+    "bucketView": "multi",
+    "multiBucketState": "reported",
+    "legacyBucketState": "omitted",
+    "ordinaryUsageAllowed": {
+      "status": "reported",
+      "value": true
+    },
+    "rateLimitResetCredits": {
+      "status": "not_reported",
+      "value": null
+    },
+    "coverage": {
+      "completeness": "unknown",
+      "exactRemainingTokens": "not_provided",
+      "affordability": "not_inferred"
+    }
+  },
+  "responseCoverage": {
+    "completeness": "partial",
+    "missingResponses": "unknown",
+    "dateBasis": "reported_occurrence_else_import_time",
+    "cumulativeSnapshots": "excluded",
+    "accountTotalRelationship": "not_combined"
+  },
+  "responseRecords": {
+    "source": {
+      "id": "demo",
+      "displayName": "Synthetic local demo",
+      "mode": "imported",
+      "provider": "user_import",
+      "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+      "accountBinding": "unverified_local_namespace",
+      "createdAt": "2026-10-02T00:00:00Z"
+    },
+    "records": [
+      {
+        "sourceId": "demo",
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "sessionId": "session-1",
+        "rootTurnId": "root-turn-1",
+        "responseId": "response-1",
+        "usage": {
+          "inputTokens": "1000",
+          "cachedInputTokens": "400",
+          "cacheWriteInputTokens": "100",
+          "outputTokens": "200",
+          "reasoningOutputTokens": "50",
+          "totalTokens": "1200"
+        },
+        "importedAt": "2026-10-02T00:00:00Z",
+        "occurredAt": null,
+        "model": null,
+        "provenance": {
+          "provider": "codex_rollout",
+          "mode": "imported",
+          "collectorVersion": "test",
+          "schemaBaseline": "a75987455a2879ca151cea5e118fa307be868583",
+          "semantics": "best_effort_provider_observed_response"
+        }
+      }
+    ],
+    "nextCursor": null,
+    "coverage": {
+      "completeness": "partial",
+      "missingResponses": "unknown",
+      "dateBasis": "reported_occurrence_else_import_time",
+      "cumulativeSnapshots": "excluded",
+      "accountTotalRelationship": "not_combined"
+    },
+    "warnings": []
+  },
+  "responseTotals": {
+    "inputTokens": "1000",
+    "cachedInputTokens": "400",
+    "cacheWriteInputTokens": "100",
+    "outputTokens": "200",
+    "reasoningOutputTokens": "50",
+    "totalTokens": "1200"
+  },
+  "responseUsage": {
+    "source": {
+      "id": "demo",
+      "displayName": "Synthetic local demo",
+      "mode": "imported",
+      "provider": "user_import",
+      "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+      "accountBinding": "unverified_local_namespace",
+      "createdAt": "2026-10-02T00:00:00Z"
+    },
+    "responseCount": "2",
+    "totals": {
+      "inputTokens": "1000",
+      "cachedInputTokens": "400",
+      "cacheWriteInputTokens": "100",
+      "outputTokens": "200",
+      "reasoningOutputTokens": "50",
+      "totalTokens": "1200"
+    },
+    "byModel": [
+      {
+        "model": null,
+        "responseCount": "2",
+        "totals": {
+          "inputTokens": "1000",
+          "cachedInputTokens": "400",
+          "cacheWriteInputTokens": "100",
+          "outputTokens": "200",
+          "reasoningOutputTokens": "50",
+          "totalTokens": "1200"
+        }
+      }
+    ],
+    "coverage": {
+      "completeness": "partial",
+      "missingResponses": "unknown",
+      "dateBasis": "reported_occurrence_else_import_time",
+      "cumulativeSnapshots": "excluded",
+      "accountTotalRelationship": "not_combined"
+    },
+    "warnings": [
+      "Possible overlapping fork history"
+    ]
+  },
+  "skills": {
+    "source": {
+      "id": "demo",
+      "displayName": "Synthetic local demo",
+      "mode": "demo",
+      "provider": "synthetic",
+      "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+      "accountBinding": "unverified_local_namespace",
+      "createdAt": "2026-10-02T00:00:00Z"
+    },
+    "events": [
+      {
+        "eventId": "event-1",
+        "sourceId": "demo",
+        "eventType": "tool_call",
+        "evidenceType": "explicit_tool_call",
+        "observedAt": "2026-10-02T00:00:00Z",
+        "occurredAt": null,
+        "sourceEventId": null,
+        "collectorVersion": "test",
+        "model": null,
+        "toolName": "read_file",
+        "skillName": null,
+        "skillVersion": null,
+        "sessionId": null,
+        "turnId": null,
+        "status": "unknown",
+        "durationMs": null,
+        "reasoningEffort": null,
+        "retryOfEventId": null,
+        "confidence": "direct",
+        "coverage": "partial"
+      },
+      {
+        "eventId": "event-2",
+        "sourceId": "demo",
+        "eventType": "tool_call",
+        "evidenceType": "explicit_tool_call",
+        "observedAt": "2026-10-02T00:00:00Z",
+        "occurredAt": "2026-10-01T12:00:00Z",
+        "sourceEventId": null,
+        "collectorVersion": "test",
+        "model": "demo-model",
+        "toolName": "read_file",
+        "skillName": null,
+        "skillVersion": null,
+        "sessionId": null,
+        "turnId": null,
+        "status": "unknown",
+        "durationMs": null,
+        "reasoningEffort": null,
+        "retryOfEventId": null,
+        "confidence": "direct",
+        "coverage": "partial"
+      }
+    ],
+    "nextCursor": null,
+    "coverage": {
+      "completeness": "partial",
+      "missingEvents": "unknown",
+      "preCollectionHistory": "unknown",
+      "tokenAttribution": "not_provided"
+    },
+    "warnings": [],
+    "status": "available",
+    "reason": null
+  },
+  "source": {
+    "id": "demo",
+    "displayName": "Synthetic local demo",
+    "mode": "demo",
+    "provider": "synthetic",
+    "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+    "accountBinding": "unverified_local_namespace",
+    "createdAt": "2026-10-02T00:00:00Z"
+  },
+  "status": {
+    "schemaVersion": 1,
+    "settings": {
+      "capturePaused": false,
+      "contentCaptureEnabled": false,
+      "retentionDays": 30
+    },
+    "sources": [
+      {
+        "id": "demo",
+        "displayName": "Synthetic local demo",
+        "mode": "demo",
+        "provider": "synthetic",
+        "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+        "accountBinding": "unverified_local_namespace",
+        "createdAt": "2026-10-02T00:00:00Z"
+      }
+    ],
+    "observationCount": "2",
+    "eventCount": "2",
+    "warnings": [],
+    "capabilities": []
+  },
+  "usage": {
+    "summaryState": "reported",
+    "summary": {
+      "lifetimeTokens": {
+        "status": "reported",
+        "value": "9007199254740993123456"
+      },
+      "peakDailyTokens": {
+        "status": "reported",
+        "value": "100"
+      },
+      "longestRunningTurnSec": {
+        "status": "not_reported",
+        "value": null
+      },
+      "currentStreakDays": {
+        "status": "reported",
+        "value": "0"
+      },
+      "longestStreakDays": {
+        "status": "reported",
+        "value": "8"
+      }
+    },
+    "dailyUsageBuckets": {
+      "status": "reported",
+      "value": [
+        {
+          "startDate": {
+            "status": "reported",
+            "value": "2026-10-01"
+          },
+          "tokens": {
+            "status": "reported",
+            "value": "0"
+          },
+          "sourceTimezone": null,
+          "timezoneStatus": "not_documented",
+          "model": null
+        },
+        {
+          "startDate": {
+            "status": "reported",
+            "value": "2026-10-02"
+          },
+          "tokens": {
+            "status": "reported",
+            "value": "100"
+          },
+          "sourceTimezone": null,
+          "timezoneStatus": "not_documented",
+          "model": null
+        },
+        {
+          "startDate": {
+            "status": "reported",
+            "value": "2026-10-03"
+          },
+          "tokens": {
+            "status": "not_reported",
+            "value": null
+          },
+          "sourceTimezone": null,
+          "timezoneStatus": "not_documented",
+          "model": null
+        }
+      ]
+    },
+    "semantics": "account_token_activity",
+    "coverage": {
+      "completeness": "unknown",
+      "missingDays": "unknown",
+      "perModel": "not_provided",
+      "exactRemainingTokens": "not_provided"
+    }
+  }
+}

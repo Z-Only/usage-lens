@@ -1,0 +1,123 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned Rust and source-coverage tools
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --component llvm-tools-preview --target wasm32-unknown-unknown
+          cargo install cargo-llvm-cov --version 0.9.1 --locked
+          cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - name: Rust, Leptos, static checks, and complete/diff coverage
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA=$(git hash-object -t tree --stdin </dev/null)
+          fi
+          COVERAGE_BASE="$BASE_SHA" bash scripts/ci_gate.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 14
+          if-no-files-found: warn
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x64
+          - os: macos-15
+            platform: macos-arm64
+          - os: macos-15-intel
+            platform: macos-x64
+          - os: windows-2025
+            platform: windows-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned Rust and WebAssembly builder
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --target wasm32-unknown-unknown
+          cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: python scripts/build_ui.py
+      - name: Native SQLite, transport, CLI, HTTP/MCP and Leptos tests
+        run: cargo test --locked --workspace --all-targets --features usage-lens-ui/ssr
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run typecheck:tests
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned Rust and WebAssembly builder
+        run: |
+          rustup toolchain install 1.98.1 --profile minimal --target wasm32-unknown-unknown
+          cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: python scripts/build_ui.py
+      - run: cargo build --locked -p usage-lens
+      - name: Native stdio MCP against the official SDK client
+        run: node --test tests/server/mcp-native.test.mjs
+      - run: node node_modules/@playwright/test/cli.js install --with-deps chromium
+      - name: Real browser against native synthetic dashboard, desktop and mobile
+        run: bun run test:e2e
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: browser-results
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+          if-no-files-found: warn
+  ci-gate:
+    if: always()
+    needs: [verify, runtime, browser]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every quality, runtime, and browser job
+        env:
+          VERIFY: ${{ needs.verify.result }}
+          RUNTIME: ${{ needs.runtime.result }}
+          BROWSER: ${{ needs.browser.result }}
+        run: test "$VERIFY" = success && test "$RUNTIME" = success && test "$BROWSER" = success

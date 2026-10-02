@@ -1,0 +1,120 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Stable tag to publish from this verified main commit (e.g. v0.1.0)'
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  eligible:
+    if: github.repository == 'Z-Only/usage-lens'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.guard.outputs.sha }}
+      version: ${{ steps.guard.outputs.version }}
+    steps:
+      # Run eligibility code from reviewed main, never an unchecked tag/ref.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - id: guard
+        name: Validate tag, main ancestry, versions, changelog and exact-commit CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: python scripts/release/guard.py --tag "$RELEASE_TAG"
+  build:
+    needs: [eligible]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, platform: linux-x64, target: x86_64-unknown-linux-musl}
+          - {runner: macos-15, platform: macos-arm64, target: aarch64-apple-darwin}
+          - {runner: macos-15-intel, platform: macos-x64, target: x86_64-apple-darwin}
+          - {runner: windows-2025, platform: windows-x64, target: x86_64-pc-windows-msvc}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.eligible.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+      - name: Install Linux static linker from Ubuntu packages
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Install pinned official Rust and WebAssembly tooling
+        env:
+          RELEASE_TARGET: ${{ matrix.target }}
+        run: |
+          rustup show
+          rustup target add wasm32-unknown-unknown "$RELEASE_TARGET"
+          cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - name: Test release safety logic
+        run: python -m unittest discover -s tests/release -p 'test_*.py' -v
+      - name: Build and smoke extracted native release
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          SOURCE_SHA: ${{ needs.eligible.outputs.sha }}
+        run: python scripts/release/build.py --target "$RELEASE_PLATFORM" --commit "$SOURCE_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.platform }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+  publish:
+    needs: [eligible, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          # Default scope is THIS workflow run, with this attempt in each name.
+          pattern: native-${{ github.run_id }}-${{ github.run_attempt }}-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify complete artifacts, upload draft, verify server hashes, publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          SOURCE_SHA: ${{ needs.eligible.outputs.sha }}
+        run: python scripts/release/publish.py --directory release-assets --tag "$RELEASE_TAG" --sha "$SOURCE_SHA"

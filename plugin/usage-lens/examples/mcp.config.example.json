@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "usage-lens-local": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/usage-lens/dist/cli/main.js",
+        "mcp",
+        "--db",
+        "/ABSOLUTE/usage.sqlite"
+      ]
+    }
+  }
+}

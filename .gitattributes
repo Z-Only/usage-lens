@@ -1,0 +1,3 @@
+
+# Preserve byte-exact upstream metadata and its recorded SHA-256.
+scripts/release/licenses/drain_filter_polyfill-0.1.3-Cargo.toml.orig whitespace=-blank-at-eof

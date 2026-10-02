@@ -1,0 +1,350 @@
+{
+  "any_spawner@0.3.0": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/9b2e313d20c89603ddc0deb7b1133e60c877faed/LICENSE",
+    "vcsCommit": "9b2e313d20c89603ddc0deb7b1133e60c877faed"
+  },
+  "const_str_slice_concat@0.1.0": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/4e23d2b6f1cb74ef7eb08b40ef7f14baa85a7285/LICENSE",
+    "vcsCommit": "4e23d2b6f1cb74ef7eb08b40ef7f14baa85a7285"
+  },
+  "convert_case_extras@0.2.0": {
+    "authors": [
+      "rutrum <dave@rutrum.net>"
+    ],
+    "crateArchiveSha256": "589c70f0faf8aa9d17787557d5eae854d7755cac50f5c3d12c81d3d57661cebb",
+    "crateSource": "https://crates.io/api/v1/crates/convert_case_extras/0.2.0/download",
+    "declaredLicense": "MIT",
+    "kind": "reviewed-spdx-declaration",
+    "metadataFile": "convert_case_extras-0.2.0-Cargo.toml.orig",
+    "metadataSha256": "de1a69e358036abbdf4641078fed6c0a9ac84d8fabe3c6cd76f9ebee393f6dfd",
+    "noticeStatus": "no-upstream-license-or-copyright-notice-file-found",
+    "reviewedDate": "2026-10-02",
+    "standardTexts": [
+      {
+        "file": "SPDX-MIT.txt",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt"
+      }
+    ],
+    "upstreamTree": "https://github.com/rutrum/convert-case-extras/tree/d523585a01afddd13944be1d88faa4d1db6a3eb4",
+    "vcsCommit": "d523585a01afddd13944be1d88faa4d1db6a3eb4"
+  },
+  "drain_filter_polyfill@0.1.3": {
+    "authors": [],
+    "crateArchiveSha256": "669a445ee724c5c69b1b06fe0b63e70a1c84bc9bb7d9696cd4f4e3ec45050408",
+    "crateSource": "https://crates.io/api/v1/crates/drain_filter_polyfill/0.1.3/download",
+    "declaredLicense": "MIT OR Apache-2.0",
+    "kind": "reviewed-spdx-declaration",
+    "metadataFile": "drain_filter_polyfill-0.1.3-Cargo.toml.orig",
+    "metadataSha256": "9a20e81178ae493a1524696028fbf0a8d279a97595e69c5f2c4a8353a9aa7176",
+    "noticeStatus": "no-upstream-license-or-copyright-notice-file-found",
+    "reviewedDate": "2026-10-02",
+    "standardTexts": [
+      {
+        "file": "SPDX-MIT.txt",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt"
+      },
+      {
+        "file": "SPDX-Apache-2.0.txt",
+        "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/Apache-2.0.txt"
+      }
+    ],
+    "upstreamTree": "https://github.com/whentze/drain_filter_polyfill/tree/9dc585f3eec048bfc3faf8656e07c4a19273c38f",
+    "vcsCommit": "9dc585f3eec048bfc3faf8656e07c4a19273c38f"
+  },
+  "either_of@0.1.9": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/fbc9ed631ff8c19c5eed02a1d4459e202cff7043/LICENSE",
+    "vcsCommit": "fbc9ed631ff8c19c5eed02a1d4459e202cff7043"
+  },
+  "erased@0.1.2": {
+    "authors": [
+      "Jonathan Brouwer <jonathantbrouwer@gmail.com>",
+      "Jonathan D\u00f6nszelmann <jonabent@gmail.com>"
+    ],
+    "crateArchiveSha256": "a1731451909bde27714eacba19c2566362a7f35224f52b153d3f42cf60f72472",
+    "crateSource": "https://crates.io/api/v1/crates/erased/0.1.2/download",
+    "declaredLicense": "MIT",
+    "kind": "reviewed-spdx-declaration",
+    "metadataFile": "erased-0.1.2-Cargo.toml.orig",
+    "metadataSha256": "05dd025524337ef6224a0878d4a580774d5981e1c63d9c7c2fe449b88fff703e",
+    "noticeStatus": "no-upstream-license-or-copyright-notice-file-found",
+    "reviewedDate": "2026-10-02",
+    "standardTexts": [
+      {
+        "file": "SPDX-MIT.txt",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt"
+      }
+    ],
+    "upstreamTree": "https://github.com/JonathanBrouwer/erased/tree/60eebad28ab2578a6322199099b8a07035438008",
+    "vcsCommit": "60eebad28ab2578a6322199099b8a07035438008"
+  },
+  "gloo-net@0.6.0": {
+    "declaredLicense": "MIT OR Apache-2.0",
+    "file": "5a6f5443ea473f130adbdcf84254761d1292bc79759b5253915d4b5e7afbef66.txt",
+    "sha256": "5a6f5443ea473f130adbdcf84254761d1292bc79759b5253915d4b5e7afbef66",
+    "source": "https://raw.githubusercontent.com/rustwasm/gloo/40c6daa612a90a138ba3e3d70804fcbc5ad4911e/LICENSE-MIT",
+    "vcsCommit": "40c6daa612a90a138ba3e3d70804fcbc5ad4911e"
+  },
+  "gloo-net@0.7.0": {
+    "declaredLicense": "MIT OR Apache-2.0",
+    "file": "5a6f5443ea473f130adbdcf84254761d1292bc79759b5253915d4b5e7afbef66.txt",
+    "sha256": "5a6f5443ea473f130adbdcf84254761d1292bc79759b5253915d4b5e7afbef66",
+    "source": "https://raw.githubusercontent.com/rustwasm/gloo/d69fcff62ee63f37076c4a0715a6f828b0036599/LICENSE-MIT",
+    "vcsCommit": "d69fcff62ee63f37076c4a0715a6f828b0036599"
+  },
+  "gloo-utils@0.2.0": {
+    "declaredLicense": "MIT OR Apache-2.0",
+    "file": "5a6f5443ea473f130adbdcf84254761d1292bc79759b5253915d4b5e7afbef66.txt",
+    "sha256": "5a6f5443ea473f130adbdcf84254761d1292bc79759b5253915d4b5e7afbef66",
+    "source": "https://raw.githubusercontent.com/rustwasm/gloo/f3bb1d1a1c33dbcccaf26446aca7d0cea8e9d574/LICENSE-MIT",
+    "vcsCommit": "f3bb1d1a1c33dbcccaf26446aca7d0cea8e9d574"
+  },
+  "gloo-utils@0.3.0": {
+    "declaredLicense": "MIT OR Apache-2.0",
+    "file": "5a6f5443ea473f130adbdcf84254761d1292bc79759b5253915d4b5e7afbef66.txt",
+    "sha256": "5a6f5443ea473f130adbdcf84254761d1292bc79759b5253915d4b5e7afbef66",
+    "source": "https://raw.githubusercontent.com/rustwasm/gloo/e6280d4b93c86a478a8f2f31af5f13d770b156b7/LICENSE-MIT",
+    "vcsCommit": "e6280d4b93c86a478a8f2f31af5f13d770b156b7"
+  },
+  "hydration_context@0.3.1": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/30fa4e039455bea69c9467e8ec45cad7fce0722f/LICENSE",
+    "vcsCommit": "30fa4e039455bea69c9467e8ec45cad7fce0722f"
+  },
+  "leptos@0.8.21": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/584c3a2d884b0e4dba9e3f822a9b6982cff072c7/LICENSE",
+    "vcsCommit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7"
+  },
+  "leptos_config@0.8.10": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/fbc9ed631ff8c19c5eed02a1d4459e202cff7043/LICENSE",
+    "vcsCommit": "fbc9ed631ff8c19c5eed02a1d4459e202cff7043"
+  },
+  "leptos_dom@0.8.8": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/da62c0cb9a1d814cf480c2f1dae5f67f4ea4773f/LICENSE",
+    "vcsCommit": "da62c0cb9a1d814cf480c2f1dae5f67f4ea4773f"
+  },
+  "leptos_hot_reload@0.8.6": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/da62c0cb9a1d814cf480c2f1dae5f67f4ea4773f/LICENSE",
+    "vcsCommit": "da62c0cb9a1d814cf480c2f1dae5f67f4ea4773f"
+  },
+  "leptos_macro@0.8.18": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/584c3a2d884b0e4dba9e3f822a9b6982cff072c7/LICENSE",
+    "vcsCommit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7"
+  },
+  "leptos_server@0.8.8": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/584c3a2d884b0e4dba9e3f822a9b6982cff072c7/LICENSE",
+    "vcsCommit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7"
+  },
+  "next_tuple@0.1.0": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/d665dd4b89151e5d797df3db5cd2260cbe1e8fae/LICENSE",
+    "vcsCommit": "d665dd4b89151e5d797df3db5cd2260cbe1e8fae"
+  },
+  "oco_ref@0.2.1": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/5f2d5115537d08043bba0293c406c4f9b97a4dae/LICENSE",
+    "vcsCommit": "5f2d5115537d08043bba0293c406c4f9b97a4dae"
+  },
+  "or_poisoned@0.1.0": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/6865c1f951bfa0bc5b107aa69286a110cd6f45ca/LICENSE",
+    "vcsCommit": "6865c1f951bfa0bc5b107aa69286a110cd6f45ca"
+  },
+  "quote-use-macros@0.8.4": {
+    "authors": [],
+    "crateArchiveSha256": "82ebfb7faafadc06a7ab141a6f67bcfb24cb8beb158c6fe933f2f035afa99f35",
+    "crateSource": "https://crates.io/api/v1/crates/quote-use-macros/0.8.4/download",
+    "declaredLicense": "MIT",
+    "kind": "reviewed-spdx-declaration",
+    "metadataFile": "quote-use-macros-0.8.4-Cargo.toml.orig",
+    "metadataSha256": "ab413120579469d0386e6f00afa18ac18457d3d20d81b4fd81ef558e4fa7094e",
+    "noticeStatus": "no-upstream-license-or-copyright-notice-file-found",
+    "reviewedDate": "2026-10-02",
+    "standardTexts": [
+      {
+        "file": "SPDX-MIT.txt",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt"
+      }
+    ],
+    "upstreamTree": "https://github.com/ModProg/quote-use/tree/05096f346f8b17fba8a57a235b958917ad9d99e0",
+    "vcsCommit": "05096f346f8b17fba8a57a235b958917ad9d99e0"
+  },
+  "quote-use@0.8.4": {
+    "authors": [],
+    "crateArchiveSha256": "9619db1197b497a36178cfc736dc96b271fe918875fbf1344c436a7e93d0321e",
+    "crateSource": "https://crates.io/api/v1/crates/quote-use/0.8.4/download",
+    "declaredLicense": "MIT",
+    "kind": "reviewed-spdx-declaration",
+    "metadataFile": "quote-use-0.8.4-Cargo.toml.orig",
+    "metadataSha256": "ecfc7dc2e4798974d187be845eb0ebf237172b81ba92d3c9975dbc6d7afd7491",
+    "noticeStatus": "no-upstream-license-or-copyright-notice-file-found",
+    "reviewedDate": "2026-10-02",
+    "standardTexts": [
+      {
+        "file": "SPDX-MIT.txt",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt"
+      }
+    ],
+    "upstreamTree": "https://github.com/ModProg/quote-use/tree/05096f346f8b17fba8a57a235b958917ad9d99e0",
+    "vcsCommit": "05096f346f8b17fba8a57a235b958917ad9d99e0"
+  },
+  "reactive_graph@0.2.15": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/584c3a2d884b0e4dba9e3f822a9b6982cff072c7/LICENSE",
+    "vcsCommit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7"
+  },
+  "reactive_stores@0.4.4": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/584c3a2d884b0e4dba9e3f822a9b6982cff072c7/LICENSE",
+    "vcsCommit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7"
+  },
+  "reactive_stores_macro@0.4.4": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/584c3a2d884b0e4dba9e3f822a9b6982cff072c7/LICENSE",
+    "vcsCommit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7"
+  },
+  "rstml@0.12.1": {
+    "declaredLicense": "MIT",
+    "file": "f99321bd5b3678fae12d43f1ae77064b2a0f6db3646c36d5171a38ecd01e744c.txt",
+    "sha256": "f99321bd5b3678fae12d43f1ae77064b2a0f6db3646c36d5171a38ecd01e744c",
+    "source": "https://raw.githubusercontent.com/rs-tml/rstml/dfa36937d343340916cae8e13b9a9c4315acdc0e/LICENSE",
+    "vcsCommit": "dfa36937d343340916cae8e13b9a9c4315acdc0e"
+  },
+  "server_fn@0.8.13": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/30fa4e039455bea69c9467e8ec45cad7fce0722f/LICENSE",
+    "vcsCommit": "30fa4e039455bea69c9467e8ec45cad7fce0722f"
+  },
+  "server_fn_macro@0.8.11": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/584c3a2d884b0e4dba9e3f822a9b6982cff072c7/LICENSE",
+    "vcsCommit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7"
+  },
+  "server_fn_macro_default@0.8.5": {
+    "authors": [
+      "Greg Johnston"
+    ],
+    "crateArchiveSha256": "63eb08f80db903d3c42f64e60ebb3875e0305be502bdc064ec0a0eab42207f00",
+    "crateSource": "https://crates.io/api/v1/crates/server_fn_macro_default/0.8.5/download",
+    "declaredLicense": "MIT",
+    "kind": "reviewed-spdx-declaration",
+    "metadataFile": "server_fn_macro_default-0.8.5-Cargo.toml.orig",
+    "metadataSha256": "5615a9a9d8ae44a98d4979cc15641a3822ee3ac2e0071c61d879d46c0a0f46d3",
+    "noticeStatus": "recorded-vcs-commit-unavailable",
+    "reviewedDate": "2026-10-02",
+    "standardTexts": [
+      {
+        "file": "SPDX-MIT.txt",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt"
+      }
+    ],
+    "upstreamTree": "https://github.com/leptos-rs/leptos/tree/a81b717c58d87d27aa550735a2ec1b2306f8c6bd",
+    "vcsCommit": "a81b717c58d87d27aa550735a2ec1b2306f8c6bd"
+  },
+  "syn_derive@0.2.0": {
+    "authors": [
+      "Kyuuhachi <caagr98@gmail.com>"
+    ],
+    "crateArchiveSha256": "cdb066a04799e45f5d582e8fc6ec8e6d6896040d00898eb4e6a835196815b219",
+    "crateSource": "https://crates.io/api/v1/crates/syn_derive/0.2.0/download",
+    "declaredLicense": "MIT OR Apache-2.0",
+    "kind": "reviewed-spdx-declaration",
+    "metadataFile": "syn_derive-0.2.0-Cargo.toml.orig",
+    "metadataSha256": "4643adc1a5a5bdbc1cf70f0d6aedbb41ffdc04f573aceb3704d3fb3a8f82b4d8",
+    "noticeStatus": "no-upstream-license-or-copyright-notice-file-found",
+    "reviewedDate": "2026-10-02",
+    "standardTexts": [
+      {
+        "file": "SPDX-MIT.txt",
+        "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt"
+      },
+      {
+        "file": "SPDX-Apache-2.0.txt",
+        "sha256": "074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff",
+        "source": "https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/Apache-2.0.txt"
+      }
+    ],
+    "upstreamTree": "https://github.com/Kyuuhachi/syn_derive/tree/5e4779d66a16eb2de1745fb5d1a3cb09594dfe62",
+    "vcsCommit": "5e4779d66a16eb2de1745fb5d1a3cb09594dfe62"
+  },
+  "tachys@0.2.19": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/584c3a2d884b0e4dba9e3f822a9b6982cff072c7/LICENSE",
+    "vcsCommit": "584c3a2d884b0e4dba9e3f822a9b6982cff072c7"
+  },
+  "throw_error@0.3.1": {
+    "declaredLicense": "MIT",
+    "file": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f.txt",
+    "sha256": "76356e713a0d1ea0bde549f4236b01c750100ab31790019843faa5aec449310f",
+    "source": "https://raw.githubusercontent.com/leptos-rs/leptos/43359694b6596f88d911b9c8d8d92a121c27d0ce/LICENSE",
+    "vcsCommit": "43359694b6596f88d911b9c8d8d92a121c27d0ce"
+  },
+  "wasm_split_helpers@0.2.3": {
+    "declaredLicense": "MIT OR Apache-2.0",
+    "file": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2.txt",
+    "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "source": "https://raw.githubusercontent.com/WorldSEnder/wasm-split-prototype/d8263b20578e8c49b02851009ae3bc7d43c567bd/LICENSE",
+    "vcsCommit": "d8263b20578e8c49b02851009ae3bc7d43c567bd"
+  },
+  "wasm_split_macros@0.2.2": {
+    "declaredLicense": "MIT OR Apache-2.0",
+    "file": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2.txt",
+    "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "source": "https://raw.githubusercontent.com/WorldSEnder/wasm-split-prototype/a3266fe9d998b3f8b0d2111500b7c4b8ec892506/LICENSE",
+    "vcsCommit": "a3266fe9d998b3f8b0d2111500b7c4b8ec892506"
+  }
+}

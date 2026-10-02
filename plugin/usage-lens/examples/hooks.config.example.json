@@ -1,0 +1,42 @@
+{
+  "description": "Optional future local events; replace absolute paths and explicitly configure only after reviewing local-content settings.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/ABSOLUTE/usage-lens/dist/cli/main.js\" hook --db \"/ABSOLUTE/usage.sqlite\" --source local-hooks",
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/ABSOLUTE/usage-lens/dist/cli/main.js\" hook --db \"/ABSOLUTE/usage.sqlite\" --source local-hooks",
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/ABSOLUTE/usage-lens/dist/cli/main.js\" hook --db \"/ABSOLUTE/usage.sqlite\" --source local-hooks",
+            "async": true,
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
