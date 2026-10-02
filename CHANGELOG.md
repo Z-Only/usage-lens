@@ -6,6 +6,19 @@ Releases group useful features and fixes. Merging a PR does not automatically cr
 
 Further changes will be grouped here until a meaningful release is ready.
 
+## [0.1.1] - 2026-10-02
+
+### Changed
+
+- Make the self-contained usage-summary Skill and native local CLI the default conversational query path; keep MCP as an explicitly optional alternative
+- Document approved standalone Skill setup, exact local executable/database/source configuration, and the distinction between local data processing and aggregate results shared into an AI conversation
+
+### Fixed
+
+- Add an aggregate-only `skill-summary` CLI query shared with MCP; keep individual `skills` evidence local and outside the conversational Skill allowlist
+- Prevent persisted read-only query commands from implicitly initializing or migrating the local database
+- Keep product-version reporting aligned with the native package version while preserving unchanged adapter contract identities
+
 ## [0.1.0] - 2026-10-02
 
 Initial local-first release. This entry describes the intended first release; downloadable artifacts exist only after the tag workflow has passed and published them.

@@ -131,7 +131,7 @@ impl ReadOnlyAppServer {
             return Err(AdapterError("already_initialized"));
         }
         self.initialized = true;
-        self.request("initialize", Some(json!({"clientInfo":{"name":"usage_lens","title":"Usage Lens","version":"0.1.0"},"capabilities":null}))).await?;
+        self.request("initialize", Some(json!({"clientInfo":{"name":"usage_lens","title":"Usage Lens","version":env!("CARGO_PKG_VERSION")},"capabilities":null}))).await?;
         self.write(
             &json!({"method":"initialized","params":{}}),
             Instant::now() + Duration::from_millis(self.limits.request_timeout_ms),

@@ -10,7 +10,11 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-pub const HELP: &str = "Usage Lens 0.1.0 — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: status, overview, daily, quota, history, events, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, collect, hook, serve, mcp\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n";
+pub const HELP: &str = concat!(
+    "Usage Lens ",
+    env!("CARGO_PKG_VERSION"),
+    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, collect, hook, serve, mcp\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N]\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
+);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
     pub command: String,
@@ -31,7 +35,7 @@ pub fn parse_arguments(argv: &[String]) -> Result<Arguments, AdapterError> {
     }
     let allowed: &[&str] = match command.as_str() {
         "status" | "mcp" => &[],
-        "overview" | "quota" => &["source", "max-age-ms"],
+        "overview" | "quota" | "skill-summary" => &["source", "max-age-ms"],
         "daily" => &["source", "from", "to", "max-age-ms"],
         "response-tokens" | "tools" => &["source", "from", "to", "model"],
         "history" => &["source", "max-age-ms", "cursor", "limit"],
@@ -236,7 +240,29 @@ async fn execute(
         if !Path::new(filename).is_absolute() {
             return Err(AdapterError("absolute_database_path_required"));
         }
-        UsageStore::open(filename)?
+        let read_only = matches!(
+            command.as_str(),
+            "status"
+                | "overview"
+                | "daily"
+                | "quota"
+                | "history"
+                | "events"
+                | "skills"
+                | "skill-summary"
+                | "tools"
+                | "response-tokens"
+                | "detail"
+                | "mcp"
+        ) || (command == "settings"
+            && !["pause", "content", "retention-days"]
+                .iter()
+                .any(|key| flags.contains_key(*key)));
+        if read_only {
+            UsageStore::open_read_only(filename)?
+        } else {
+            UsageStore::open(filename)?
+        }
     };
     if demo {
         seed_demo(&store, chrono::Utc::now().timestamp_millis())?;
@@ -446,6 +472,7 @@ async fn execute(
                         "history" => store.get_quota_history(&params)?,
                         "events" => store.get_events(&params)?,
                         "skills" => store.get_skill_evidence(&params)?,
+                        "skill-summary" => store.get_skill_summary(&params)?,
                         "response-tokens" => store.get_response_token_usage(&params)?,
                         "tools" => store.get_tool_usage(&params)?,
                         "detail" => store.get_local_event_detail(

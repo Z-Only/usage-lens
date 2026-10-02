@@ -1,8 +1,8 @@
 # Usage Lens
 
-Local usage evidence for AI workflows: a private loopback dashboard, a read-only query plugin, and explicit collectors/importers.
+Local usage evidence for AI workflows: a private loopback dashboard, Skill + local CLI queries, optional MCP, and explicit collectors/importers.
 
-中文：在本机查看可取得的 AI 使用记录、Token、官方额度窗口和 Skill／工具证据。正文与工具明细只在本地查看；通过 ChatGPT 查询时，仅返回所请求的统计。缺失记录不会被当作零，加载 Skill 不会被当作任务成功。
+中文：在本机查看可取得的 AI 使用记录、Token、官方额度窗口和 Skill／工具证据。对话查询默认使用 Skill + 本地 CLI，MCP 保留为可选项。正文与工具明细只在本地查看；通过助手查询时，仅返回所请求的统计。缺失记录不会被当作零，加载 Skill 不会被当作任务成功。
 
 ## What it can tell you
 
@@ -91,20 +91,53 @@ The optional hook configuration in [the plugin package](plugin/usage-lens/README
 
 Skill metrics distinguish requested, read/loaded, and explicitly recorded invocation evidence. Pagination and resource reads are not new invocations. Instruction injection is not task success. Imported or forked histories can overlap; coverage and evidence categories must remain visible.
 
-## ChatGPT / MCP integration
+## Conversational integration: Skill + local CLI
 
-[plugin/usage-lens](plugin/usage-lens/README.md) contains a validated plugin manifest, aggregate-query skill, and inert configuration examples. Building this project does not install the plugin, change your client settings, register hooks, authenticate, or open a tunnel.
+The default is **Skill + local CLI**. Install the self-contained `usage-summary`
+skill in a local-capable client, then supply the exact native executable, existing
+absolute database path, and source ID. Follow the concrete, permission-aware
+[Skill installation steps](docs/AI_INSTALL.md#6-primary-conversational-integration-skill--local-cli).
+No MCP server or running dashboard is needed for queries.
 
-For a client supporting local stdio MCP, the process entry is:
+The [plugin package](plugin/usage-lens/README.md) contains the Skill, an inert plugin
+manifest, and optional examples. Its seven allowed commands are `status`, `overview`,
+`daily`, `quota`, `tools`, `skill-summary`, and `response-tokens`. For example, on a POSIX
+shell after replacing the placeholders:
 
 ```sh
-/absolute/path/to/usage-lens mcp \
-  --db /absolute/path/to/usage.sqlite
+'/ABSOLUTE/usage-lens' status --db '/ABSOLUTE/usage.sqlite'
+'/ABSOLUTE/usage-lens' skill-summary --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
 ```
 
-The query server exposes a fixed aggregate allowlist. It has no raw-content, SQL, arbitrary file, account-refresh, or deletion tools. Returned summaries leave the machine when you request them through a remote assistant. Use the local web dashboard for retained content.
+Use the intended source from `status`; never guess a database or account binding.
+The Skill only queries existing aggregates. Collection, imports, hooks, dashboard
+startup, and local content review remain separate workflows. Building this project
+does not install the Skill, change client settings, authenticate, or open a tunnel.
+`skill-summary` matches MCP `usage_skills` and supports source/freshness inputs,
+not date/model filters. The local `skills` evidence command is outside this
+conversational allowlist. The instruction-level allowlist is not an OS sandbox. Persisted queries open an
+existing schema-2 rollback-journal store read-only; normal v0.1.0 databases remain
+compatible. Queries fail rather than create or migrate a store.
 
-Cloud ChatGPT cannot directly reach this local stdio process or your loopback address. Any remote transport requires separate setup, authorization, and real-client verification. Protocol tests are not proof of a working integration on every ChatGPT surface.
+### Optional MCP
+
+MCP remains available only when explicitly chosen and separately configured in a
+client supporting local stdio MCP. The process entry is:
+
+```sh
+'/ABSOLUTE/usage-lens' mcp --db '/ABSOLUTE/usage.sqlite'
+```
+
+The server's seven aggregate tools have no raw-content, SQL, arbitrary-file,
+account-refresh, or deletion endpoints. The Skill does not auto-activate MCP or
+silently switch transports. Both CLI and MCP results leave the machine when shared
+with a remote assistant; use the local dashboard for retained content.
+
+A Skill does not grant computer access. Cloud-only ChatGPT cannot directly execute
+the user's local CLI or reach local stdio/loopback. Any remote setup requires
+separate authorization and real-client verification. Synthetic tests do not prove
+integration with every ChatGPT surface; no real client has been installed by this
+project's tests.
 
 ## Privacy and deletion
 
@@ -147,7 +180,7 @@ Tests use synthetic data, fake app-server peers, an in-memory MCP client, and lo
 - `crates/usage-lens/src/cli.rs`: explicit collection/import/query/server lifecycle commands
 - `crates/usage-lens-ui`: Leptos dashboard, shared Rust view models and native-render tests
 - `scripts/build_ui.py`: genuine CSR WebAssembly build, hashed asset manifest, native embedding validation
-- `plugin`: distributable instructions and opt-in configuration examples
+- `plugin`: CLI-first aggregate Skill and optional MCP/hook configuration examples
 - `.github/workflows`: PR checks, native package checks, and version-tag releases
 
 The database/query core is shared. The remote-assistant query surface is deliberately narrower than the local detail surface.
@@ -155,6 +188,7 @@ The database/query core is shared. The remote-assistant query surface is deliber
 ## Upstream references
 
 - [Official app-server methods](https://learn.chatgpt.com/docs/app-server)
+- [Official Skill discovery and invocation](https://learn.chatgpt.com/docs/build-skills)
 - [Supported plugin surfaces](https://learn.chatgpt.com/docs/plugins)
 - [Local hook contract](https://learn.chatgpt.com/docs/hooks)
 - [Data contract and source semantics](docs/data-contract.md)
