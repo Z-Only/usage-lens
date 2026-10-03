@@ -1,5 +1,7 @@
 #[path = "health.rs"]
 mod health;
+#[path = "skill_trends.rs"]
+mod skill_trends;
 
 use super::{
     normalize::{count, normalize_account, normalize_rate_limits, normalize_usage},
@@ -868,16 +870,6 @@ impl UsageStore {
     }
     pub fn get_overview(&self, input: &Value) -> CoreResult<Value> {
         self.read(|| self.get_overview_impl(input))
-    }
-    /// Aggregate-only skill evidence for remote-assistant query surfaces.
-    pub fn get_skill_summary(&self, input: &Value) -> CoreResult<Value> {
-        let overview = self.get_overview(input)?;
-        Ok(json!({
-            "source":overview["source"],
-            "skills":overview["events"]["skills"],
-            "coverage":overview["events"]["coverage"],
-            "warnings":overview["warnings"]
-        }))
     }
     fn get_overview_impl(&self, input: &Value) -> CoreResult<Value> {
         let (source, max_age) = self.query_source(input, &[])?;

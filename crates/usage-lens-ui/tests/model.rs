@@ -604,3 +604,153 @@ fn health_labels_preserve_distinct_states_and_exact_or_unknown_counts() {
         );
     }
 }
+
+#[test]
+fn skill_date_pairs_are_strict_utc_calendar_ranges_bounded_to_366_days() {
+    for (from, to, valid) in [
+        ("", "", false),
+        ("2026-10-01", "", false),
+        ("", "2026-10-01", false),
+        ("2026-02-30", "2026-03-01", false),
+        ("2026-1-01", "2026-01-01", false),
+        ("2026-10-03", "2026-10-01", false),
+        ("2026-10-01", "2026-10-01", true),
+        ("2024-01-01", "2024-12-31", true),
+        ("2024-01-01", "2025-01-01", false),
+    ] {
+        let filters = Filters {
+            from: from.into(),
+            to: to.into(),
+            ..Filters::default()
+        };
+        assert_eq!(filters.skill_dates_valid(), valid, "{from}..{to}");
+    }
+}
+fn trend_filters(s: &mut State) {
+    s.dispatch(Action::Filter("from", "2026-10-01".into()));
+    s.dispatch(Action::Filter("to", "2026-10-03".into()));
+}
+#[test]
+fn skill_trends_load_only_paired_dates_and_keep_exact_scope_separate() {
+    let mut s = loaded();
+    let requests = s.dispatch(Action::Navigate(Page::Skills));
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].slot, Slot::Skills);
+    assert!(s.dispatch(Action::ApplyFilters).is_empty());
+    assert_eq!(s.error(Slot::SkillSummary), "invalid_skill_date_range");
+    trend_filters(&mut s);
+    s.dispatch(Action::Filter(
+        "skillName",
+        " Mixed /中文&kind=invoked ".into(),
+    ));
+    s.dispatch(Action::Filter("model", "ignored-model".into()));
+    s.dispatch(Action::Filter("eventType", "ignored-event".into()));
+    let r = s.dispatch(Action::ApplyFilters).remove(0);
+    assert_eq!(r.slot, Slot::SkillSummary);
+    assert!(r.path.starts_with("/api/skill-summary?"));
+    assert!(r.path.contains("fromDate=2026-10-01&toDate=2026-10-03"));
+    assert!(
+        r.path
+            .contains("skillName=%20Mixed%20%2F%E4%B8%AD%E6%96%87%26kind%3Dinvoked%20")
+    );
+    assert!(r.path.contains("sourceId=demo"));
+    assert!(!r.path.contains("ignored"));
+    assert!(!r.path.contains("&kind="));
+    let mut response = fixture("skillSummary");
+    response["skillName"] = json!(s.filters.skill_name);
+    s.complete(&r, Ok(response));
+    assert_eq!(s.data(Slot::SkillSummary)["unknownOccurredAtCount"], "7");
+    let requests = s.dispatch(Action::Navigate(Page::Skills));
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[1].slot, Slot::SkillSummary);
+    let mut empty = State::default();
+    empty.page = Page::Skills;
+    trend_filters(&mut empty);
+    assert!(empty.dispatch(Action::ApplyFilters).is_empty());
+}
+#[test]
+fn skill_filter_edits_reset_and_new_generations_discard_pending_responses() {
+    let mut s = loaded();
+    s.page = Page::Skills;
+    trend_filters(&mut s);
+    let old = s.dispatch(Action::ApplyFilters).remove(0);
+    let current = s.dispatch(Action::ApplyFilters).remove(0);
+    assert!(!s.accepts(&old));
+    s.complete(&old, Err("stale".into()));
+    s.complete(&current, Ok(fixture("skillSummary")));
+    assert_eq!(s.error(Slot::SkillSummary), "");
+    for (key, value) in [
+        ("from", "2026-10-01"),
+        ("to", "2026-10-03"),
+        ("skillName", "new"),
+    ] {
+        let request = s.dispatch(Action::ApplyFilters).remove(0);
+        s.dispatch(Action::Filter(key, value.into()));
+        assert!(!s.accepts(&request));
+        assert!(!s.loading(Slot::SkillSummary));
+        assert!(s.data(Slot::SkillSummary).is_null());
+        s.complete(&request, Ok(fixture("skillSummary")));
+        assert!(s.data(Slot::SkillSummary).is_null());
+    }
+    let request = s.dispatch(Action::ApplyFilters).remove(0);
+    assert!(s.dispatch(Action::ResetFilters).is_empty());
+    assert_eq!(s.filters, Filters::default());
+    assert!(!s.accepts(&request));
+    assert!(
+        s.dispatch(Action::Load(Slot::SkillSummary, false))
+            .is_empty()
+    );
+    assert_eq!(s.error(Slot::SkillSummary), "invalid_skill_date_range");
+}
+#[test]
+fn skill_trends_reject_wrong_response_filters_sources_and_source_switch_races() {
+    for (field, value, code) in [
+        ("fromDate", "2026-10-02", "filter_mismatch"),
+        ("toDate", "2026-10-04", "filter_mismatch"),
+        ("skillName", "wrong", "filter_mismatch"),
+        ("source", "other", "source_mismatch"),
+    ] {
+        let mut s = loaded();
+        s.page = Page::Skills;
+        trend_filters(&mut s);
+        let request = s.dispatch(Action::ApplyFilters).remove(0);
+        let mut response = fixture("skillSummary");
+        if field == "source" {
+            response["source"]["id"] = json!(value);
+        } else {
+            response[field] = json!(value);
+        }
+        s.complete(&request, Ok(response));
+        assert_eq!(s.error(Slot::SkillSummary), code);
+        assert!(s.data(Slot::SkillSummary).is_null());
+        let retry = s
+            .dispatch(Action::Load(Slot::SkillSummary, false))
+            .remove(0);
+        s.complete(&retry, Ok(fixture("skillSummary")));
+        assert_eq!(s.error(Slot::SkillSummary), "");
+        assert!(!s.data(Slot::SkillSummary).is_null());
+        let old = s.dispatch(Action::ApplyFilters).remove(0);
+        s.dispatch(Action::Source("other".into()));
+        s.complete(&old, Ok(fixture("skillSummary")));
+        assert!(s.data(Slot::SkillSummary).is_null());
+    }
+}
+#[test]
+fn editing_invalid_dates_clears_previous_trend_and_preserves_activity_filters() {
+    let mut s = loaded();
+    s.page = Page::Skills;
+    trend_filters(&mut s);
+    let request = s.dispatch(Action::ApplyFilters).remove(0);
+    s.complete(&request, Ok(fixture("skillSummary")));
+    s.dispatch(Action::Filter("to", "2026-09-01".into()));
+    assert!(s.dispatch(Action::ApplyFilters).is_empty());
+    assert!(s.data(Slot::SkillSummary).is_null());
+    s.dispatch(Action::Filter("to", "2026-10-03".into()));
+    let requests = s.dispatch(Action::Navigate(Page::Activity));
+    assert!(
+        requests[0]
+            .path
+            .contains("fromDate=2026-10-01&toDate=2026-10-03")
+    );
+    assert!(s.data(Slot::SkillSummary).is_null());
+}

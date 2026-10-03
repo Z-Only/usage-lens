@@ -362,3 +362,30 @@ pub fn date_range(from: &Value, to: &Value) -> CoreResult<(String, String)> {
     }
     Ok((from, to))
 }
+
+pub type SkillSummaryFilters = (Option<(String, String)>, Option<String>);
+
+/// Optional skill-summary range is inclusive and bounded to 366 UTC days.
+/// Presence matters: explicit null and unpaired dates are invalid.
+pub fn skill_summary_filters(input: &Value) -> CoreResult<SkillSummaryFilters> {
+    let range = match (input.get("fromDate"), input.get("toDate")) {
+        (None, None) => None,
+        (Some(from), Some(to)) => {
+            let (from, to) = date_range(from, to)?;
+            let days = NaiveDate::parse_from_str(&to, "%Y-%m-%d")
+                .unwrap()
+                .signed_duration_since(NaiveDate::parse_from_str(&from, "%Y-%m-%d").unwrap())
+                .num_days();
+            if days >= 366 {
+                return Err(CoreError::InvalidInput);
+            }
+            Some((from, to))
+        }
+        _ => return Err(CoreError::InvalidInput),
+    };
+    let skill = input
+        .get("skillName")
+        .map(|v| bounded_text(v, 256))
+        .transpose()?;
+    Ok((range, skill))
+}

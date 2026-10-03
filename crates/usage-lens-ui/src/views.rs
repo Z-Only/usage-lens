@@ -1130,11 +1130,146 @@ pub fn activity(s: &State, ui: Ui) -> AnyView {
     }
     .into_any()
 }
+const SKILL_TREND_COLUMNS: [(&str, &str, &str); 6] = [
+    ("requested", "Requested", "请求"),
+    ("loaded", "Loaded", "加载"),
+    ("invoked", "Invoked", "调用"),
+    ("mainRead", "Loaded · main read", "加载 · 主文件读取"),
+    (
+        "instructionInjection",
+        "Loaded · instruction injection",
+        "加载 · 指令注入",
+    ),
+    ("unknown", "Loaded · unknown subtype", "加载 · 未知子类型"),
+];
+fn skill_trend_count(value: &Value, key: &str) -> String {
+    integer(value.get(key).unwrap_or(&value["loadedEvidence"][key]))
+}
+pub fn skill_trends(s: &State, ui: Ui) -> AnyView {
+    let l = s.language;
+    view! {
+        <section class="panel skill-trends" aria-labelledby="skill-trends-title">
+            <div class="section-heading">
+                <h2 id="skill-trends-title">{l.text("Daily skill evidence", "每日技能证据")}</h2>
+                <span class="state-label">{l.text("Partial retained history", "部分保留历史")}</span>
+            </div>
+            <p class="muted">
+                {l.text("Separate evidence counts by UTC occurrence date. Missing days remain unknown; records are not successful or unique executions.", "按 UTC 发生日期分别统计证据。缺失日期仍为未知；记录不代表成功或唯一执行次数。")}
+            </p>
+            <form class="filters" on:submit=event_bridge::prevent(ui, Action::ApplyFilters)>
+                <label>
+                    {l.text("From (UTC)", "开始日期（UTC）")}
+                    <input type="date" name="from" prop:value=s.filters.from.clone()
+                        on:input=event_bridge::value(ui, InputAction::Filter("from")) />
+                </label>
+                <label>
+                    {l.text("To (UTC)", "结束日期（UTC）")}
+                    <input type="date" name="to" prop:value=s.filters.to.clone()
+                        on:input=event_bridge::value(ui, InputAction::Filter("to")) />
+                </label>
+                <label class="skill-name-filter">
+                    {l.text("Exact skill name (optional)", "精确技能名（可选）")}
+                    <input name="skillName" prop:value=s.filters.skill_name.clone()
+                        placeholder=l.text("All skill names", "所有技能名")
+                        on:input=event_bridge::value(ui, InputAction::Filter("skillName")) />
+                </label>
+                <button class="button primary" type="submit" disabled=s.source.is_empty()>
+                    {l.text("Apply filters", "应用筛选")}
+                </button>
+                <Button ui action=Action::ResetFilters text=l.text("Reset", "重置") />
+            </form>
+            <p class="footnote">
+                {l.text("Choose both dates, up to 366 days inclusive. Dates are shared with Activity; its model and event-type filters do not apply here. Import time is never used.", "请同时选择起止日期，含首尾最多 366 天。日期与活动页共用；模型及事件类型筛选不适用于此处。不会使用导入时间。")}
+            </p>
+            {move || ui.state.with(|state| skill_trend_result(state, ui))}
+        </section>
+    }.into_any()
+}
+pub fn skill_trend_result(s: &State, ui: Ui) -> AnyView {
+    let l = s.language;
+    let slot = Slot::SkillSummary;
+    let result = s.data(slot);
+    if !s.error(slot).is_empty() {
+        return view! {
+            <div class="notice error" role="alert">
+                <span>{if s.error(slot) == "invalid_skill_date_range" {
+                    l.text("Choose a valid UTC date pair, no more than 366 days inclusive.", "请选择有效的 UTC 起止日期，含首尾不超过 366 天。")
+                } else {
+                    l.text("Could not load daily evidence.", "无法加载每日证据。")
+                }}</span>
+                <small>{s.error(slot).to_owned()}</small>
+                <Button ui action=Action::Load(slot, false) text=l.text("Retry", "重试") class="text-button" />
+            </div>
+        }.into_any();
+    }
+    view! {
+        <div class="skill-trend-result" aria-busy=s.loading(slot).to_string()>
+            {remote_notice(s, slot, ui)}
+            {if result.is_null() {
+                (!s.loading(slot)).then(|| view! {
+                    <p class="muted">{l.text("Apply a date range to read daily evidence.", "应用日期范围以查看每日证据。")}</p>
+                }).into_any()
+            } else {
+                let daily = rows(&result["daily"]);
+                view! {
+                    <p class="skill-trend-scope">
+                        <strong>{l.text("Selected range (UTC): ", "所选范围（UTC）：")}</strong>
+                        {string(&result["fromDate"]).to_owned()}" – "{string(&result["toDate"]).to_owned()}
+                        <span>{if result["skillName"].is_null() {
+                            l.text("All skill names", "所有技能名").to_owned()
+                        } else { string(&result["skillName"]).to_owned() }}</span>
+                    </p>
+                    <h3 class="skill-trend-label">{l.text("Evidence records in selected range", "所选范围内的证据记录")}</h3>
+                    <dl class="response-totals skill-trend-totals">
+                        {SKILL_TREND_COLUMNS.into_iter().map(|(key, en, zh)| view! {
+                            <div><dt>{l.text(en, zh)}</dt><dd>{skill_trend_count(&result["totals"], key)}</dd></div>
+                        }).collect_view()}
+                    </dl>
+                    {if daily.is_empty() {
+                        view! {
+                            <div class="empty-state compact">
+                                <h3>{l.text("No dated evidence in this range", "此范围内没有带日期的证据")}</h3>
+                                <p>{l.text("No matching retained records does not prove no skill usage.", "没有匹配的保留记录，不代表没有使用技能。")}</p>
+                            </div>
+                        }.into_any()
+                    } else {
+                        view! {
+                            <div class="table-scroll" tabindex="0" role="region" aria-label=l.text("Daily skill evidence table", "每日技能证据表")>
+                                <table class="skill-trend-table">
+                                    <caption>{l.text("Recorded days only · UTC; omitted days are unknown", "仅显示有记录的 UTC 日期；未列出的日期为未知")}</caption>
+                                    <thead><tr><th scope="col">{l.text("Date (UTC)", "日期（UTC）")}</th>
+                                        {SKILL_TREND_COLUMNS.into_iter().map(|(_, en, zh)| view! { <th scope="col">{l.text(en, zh)}</th> }).collect_view()}
+                                    </tr></thead>
+                                    <tbody>{daily.into_iter().map(|day| view! {
+                                        <tr><th scope="row">{string(&day["date"]).to_owned()}</th>
+                                            {SKILL_TREND_COLUMNS.into_iter().map(|(key, _, _)| view! { <td>{skill_trend_count(&day, key)}</td> }).collect_view()}
+                                        </tr>
+                                    }).collect_view()}</tbody>
+                                </table>
+                            </div>
+                        }.into_any()
+                    }}
+                    <p class="footnote skill-unknown-time">
+                        <strong>{l.text("Unknown occurrence time: ", "发生时间未知：")}{integer(&result["unknownOccurredAtCount"])}</strong>
+                        " "{l.text("Across all retained records for this source and exact skill filter, outside the dated totals. These records cannot be assigned to a day.", "范围为此来源及精确技能筛选下的全部保留记录，不计入日期范围合计。这些记录无法归入某一天。")}
+                    </p>
+                    {(result["skillsTruncated"] == true).then(|| view! {
+                        <p class="footnote">{l.text("The skill-name summary is limited to 500 entries; daily totals include all matching evidence.", "技能名汇总最多列出 500 项；每日合计包含全部匹配证据。")}</p>
+                    })}
+                    {rows(&result["warnings"]).into_iter().map(|warning| view! {
+                        <p class="footnote">{string(&warning).to_owned()}</p>
+                    }).collect_view()}
+                }.into_any()
+            }}
+        </div>
+    }.into_any()
+}
 pub fn skills(s: &State, ui: Ui) -> AnyView {
     let l = s.language;
     let counts = rows(&s.data(Slot::Overview)["events"]["skills"]);
     let result = s.data(Slot::Skills);
     view! {
+        {skill_trends(s, ui)}
         <section class="panel">
             <div class="section-heading">
                 <h2>{l.text("Skill evidence", "技能证据")}</h2>
@@ -1147,6 +1282,7 @@ pub fn skills(s: &State, ui: Ui) -> AnyView {
                         "请求、加载与调用是不同状态。分叉历史中的证据记录可能重叠，不代表唯一技能执行次数。",
                     )}
             </p>
+            <p class="footnote">{l.text("All retained evidence below; daily trend filters do not change these records.", "下方为全部保留证据；每日趋势筛选不会改变这些记录。")}</p>
             <div class="segmented" aria-label=l.text("Skill evidence state", "技能证据状态")>
                 {[
                     ("requested", "Requested", "请求"),

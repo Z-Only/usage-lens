@@ -22,7 +22,7 @@ pub fn tools_list() -> Value {
         "Returned daily source-date token buckets, with unknown gaps preserved.",
         "Service-reported quota windows; does not infer remaining token counts or access recovery.",
         "Aggregate observed tool counts; coverage is partial.",
-        "Aggregate counts of direct skill evidence, keeping requested, loaded and invoked separate.",
+        "Aggregate direct skill evidence; optional paired UTC occurrence dates (at most 366 inclusive days) and exact skillName. Requested, loaded and invoked stay separate; missing days are unknown.",
         "Aggregate imported per-response token evidence; partial and never combined with account usage or quota.",
         "Stored source counts, evidence gaps, collection freshness and failures; no collection or completeness inference.",
     ];
@@ -33,12 +33,15 @@ pub fn tools_list() -> Value {
             if ["usage_tools","usage_response_tokens"].contains(name) {
                 properties["model"]=json!({"type":"string","maxLength":160});
             } else {properties["maxAgeMs"]=json!({"type":"integer","minimum":0,"maximum":2592000000u64});}
-            if ["usage_daily","usage_tools","usage_response_tokens"].contains(name) {
+            if ["usage_daily","usage_tools","usage_response_tokens","usage_skills"].contains(name) {
                 for key in ["fromDate","toDate"] {properties[key]=json!({"type":"string","pattern":"^\\d{4}-\\d{2}-\\d{2}$"});}
                 if *name=="usage_daily" {required.extend(["fromDate","toDate"]);}
             }
         }
-        json!({"name":name,"description":description,"inputSchema":{"type":"object","properties":properties,"required":required,"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}})
+        if *name=="usage_skills" {properties["skillName"]=json!({"type":"string","minLength":1,"maxLength":256,"description":"Exact skill name; no wildcard matching."});}
+        let mut tool = json!({"name":name,"description":description,"inputSchema":{"type":"object","properties":properties,"required":required,"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}});
+        if *name=="usage_skills" {tool["inputSchema"]["dependentRequired"]=json!({"fromDate":["toDate"],"toDate":["fromDate"]});}
+        tool
     }).collect();
     json!({"tools":tools})
 }
@@ -49,6 +52,7 @@ fn valid_arguments(name: &str, args: &Value) -> bool {
     let allowed: &[&str] = match name {
         "usage_status" => &[],
         "usage_daily" => &["sourceId", "maxAgeMs", "fromDate", "toDate"],
+        "usage_skills" => &["sourceId", "maxAgeMs", "fromDate", "toDate", "skillName"],
         "usage_tools" | "usage_response_tokens" => &["sourceId", "fromDate", "toDate", "model"],
         _ => &["sourceId", "maxAgeMs"],
     };
@@ -98,6 +102,9 @@ fn valid_arguments(name: &str, args: &Value) -> bool {
         .get("model")
         .is_some_and(|v| v.as_str().is_none_or(|s| s.chars().count() > 160))
     {
+        return false;
+    }
+    if name == "usage_skills" && crate::core::validation::skill_summary_filters(args).is_err() {
         return false;
     }
     true

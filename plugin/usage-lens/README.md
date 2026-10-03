@@ -24,9 +24,19 @@ integration have not been tested.
    collect, import, inspect content, or fix a missing store by creating one
 
 `skill-summary` returns aggregate skill counts and coverage, matching MCP
-`usage_skills`. It supports `--source` and optional `--max-age-ms`, not date/model
-filters. The existing `skills` command returns local evidence records and is
-excluded from conversational queries. `health` / MCP `usage_health` reports
+`usage_skills`. It accepts `--source`, optional `--max-age-ms`, paired `--from` /
+`--to` dates (`YYYY-MM-DD`, inclusive UTC, at most 366 days), and optional exact
+`--skill` filtering. MCP uses `fromDate`, `toDate` and `skillName`. A skill-only
+summary is allowed; a daily trend requires both dates. With neither date nor skill
+filter, the existing response shape is unchanged. Filtered results separate
+requested, loaded and invoked counts plus loaded main-read/instruction-injection/
+unknown evidence, bound per-skill groups to 500, and flag truncation. See the
+[data contract](../../docs/data-contract.md#skill-evidence-summaries-and-utc-trends).
+Only `occurredAt` assigns UTC dates. Undated evidence is reported separately across
+all retained matching source/skill records, not assigned to the requested range.
+Missing days remain unknown. There are no model, success, unique-execution or
+skill-token-attribution metrics. The existing `skills` command returns local
+evidence records and is excluded from conversational queries. `health` / MCP `usage_health` reports
 selected-source collection and stored-evidence aggregates with optional
 `--max-age-ms`, without date/model filters. Missing/unsupported methods, stale or
 future collection times, source-reported `sourceAsOf`, and past failures stay
@@ -60,8 +70,8 @@ paths and values for the actual host shell. Installing the instruction-only Skil
 does not grant local execution permissions. The local database must already have
 been created and populated through separately authorized workflows. The dashboard,
 hooks, imports, and collectors remain independent of conversational setup.
-Persisted queries require a schema-2 rollback-journal store; normal v0.1.0 and v0.1.1 stores
-remain compatible without migration in v0.2.0. They fail rather than create or migrate a database. See the
+Persisted queries require a schema-2 rollback-journal store; normal v0.1.0, v0.1.1 and v0.2.0 stores
+remain compatible without migration in v0.3.0. They fail rather than create or migrate a database. See the
 [query compatibility notes](../../docs/AI_INSTALL.md#supply-the-three-explicit-query-inputs)
 for safe handling of `storage_error` and `unsupported_schema`.
 

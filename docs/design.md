@@ -16,7 +16,7 @@ Application shell, API/state utilities, overview, token chart, quota-window pane
 
 Only backend-returned records are shown. Demo is shown only for a source whose backend mode is `demo`, with the permanent label “演示数据 / Demo data”. The numerical values in the design concept are explicitly synthetic visual-reference data and are never UI fallbacks. Unknown and invalid values are not zero. Large integer strings are formatted without converting through floating-point numbers. Lifetime totals and local event counts have distinct source scopes and are never added together. The concept's example input/output counts were removed before acceptance because the contract does not supply that attribution.
 
-Daily bucket calendar labels are shown as supplied, without invented timezone conversion. The display range is anchored to the latest reported calendar bucket, not an implied current local day. Separate quota windows show only reported used percentages; no remaining-token inference. History is recorded snapshots only. Source collection time and source-as-of time are distinct. Partial history, omitted cloud activity, stale snapshots and refresh failures remain visible.
+Account-usage daily bucket calendar labels are shown as supplied, without invented timezone conversion. The display range is anchored to the latest reported calendar bucket, not an implied current local day. Separate quota windows show only reported used percentages; no remaining-token inference. History is recorded snapshots only. Source collection time and source-as-of time are distinct. Partial history, omitted cloud activity, stale snapshots and refresh failures remain visible.
 
 Requested, loaded and invoked skills are separate explicit evidence classes. Absence of direct evidence is unknown, never proof of zero use. Event content is an escaped-text local-only detail view, never HTML, and never routed to plugin query methods. Settings changes use the local backend. Retention/deletion requires an explicit typed confirmation with cancellable dialog. Authentication secrets are not collection targets; redaction is best-effort rather than a safety guarantee.
 
@@ -67,3 +67,25 @@ complete coverage from earliest/latest records, or style missing data as zero.
 The new card's English/Chinese, light/dark, narrow-width and source-switching
 behavior requires new browser evidence for the final release commit. The rendered
 verification above applies only to its named earlier commit.
+
+
+## v0.3.0 Skills daily-evidence panel
+
+The Skills view adds a compact English/Chinese daily-evidence panel using the
+shared date filters and selected source. It presents requested, loaded and invoked
+evidence separately, plus loaded main-read/instruction-injection/unknown subtype
+counts. It formats decimal strings exactly and labels its daily basis as UTC
+occurrence time; account-usage source-date labels retain their separate unknown-
+timezone caveat. No account-token or response-token count is assigned to a skill.
+
+Only backend-returned daily rows are displayed. Missing days stay absent/unknown;
+undated evidence is shown separately with its all-retained source/skill scope.
+Partial coverage, source-level import warnings and truncated skill groups remain
+visible. Read/injection overlap must not be presented as unique execution or task
+success. Shared-date changes, source changes and refreshes must discard obsolete
+requests, and failure/retry must not leave an old source's data looking current.
+
+Verification for this changed UI requires fresh screenshots and interactions at
+1440/390/320px, English/light and Chinese/dark, date filtering, empty and partial
+evidence, unknown time, exact large counts, loading/error/retry and interrupted
+source/date changes. Earlier rendered checkpoints above do not verify this panel.

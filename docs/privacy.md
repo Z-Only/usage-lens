@@ -19,7 +19,16 @@ failed query must remain an error, not trigger collection or demo substitution.
 The query Skill allows only `status`, `overview`, `daily`, `quota`, `tools`, `skill-summary`,
 `response-tokens`, and `health`; broader local commands stay outside that workflow.
 `skill-summary` shares only aggregate counts/coverage, equivalent to MCP
-`usage_skills`. The local `skills` command exposes individual evidence records and
+`usage_skills` and local `GET /api/skill-summary`. Optional paired UTC date filters
+and exact skill-name filtering do not widen that boundary. Filtered results return
+bounded per-skill groups, requested/loaded/invoked totals, loaded-evidence subtypes,
+daily aggregates when dates are supplied, and explicit partial/undated/truncation
+warnings. They contain no individual evidence/session/turn identities, retained
+bodies, import fingerprints, credentials or local paths. Skill names themselves
+are returned metadata; review aggregate-sharing scope before querying a private
+source through a remote assistant. Import warnings are source-level and must not
+be represented as date-range or skill-specific completeness. The local `skills`
+command exposes individual evidence records and
 must not be called through this Skill or used as an aggregate fallback. This
 instruction boundary is not an OS sandbox for a client with general shell access.
 Persisted query commands use a read-only SQLite connection and require a current
