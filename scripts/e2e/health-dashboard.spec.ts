@@ -138,9 +138,12 @@ test("source health handles retry, interrupted source switching, and honest cove
   };
   await noOverflow();
   const englishScreenshot = testInfo.outputPath("health-en-light.png");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(() => page.evaluate(() => ({ x: scrollX, y: scrollY }))).toEqual({ x: 0, y: 0 });
   await recordHiddenSkipLink(page, testInfo, "health-en-light");
   // Oversized locator screenshots can recenter fixed offscreen controls into the crop.
-  // Capture the document without changing application CSS or masking real elements.
+  // Full-page capture must start at the document origin so fixed UI is positioned normally.
+  // Keep application CSS intact and do not mask real elements.
   await page.screenshot({ path: englishScreenshot, fullPage: true });
   await testInfo.attach("health-en-light", { path: englishScreenshot, contentType: "image/png" });
 
@@ -160,6 +163,8 @@ test("source health handles retry, interrupted source switching, and honest cove
   await expect(chinesePanel).toContainText("缺失记录：未知");
   await noOverflow();
   const chineseScreenshot = testInfo.outputPath("health-zh-dark.png");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect.poll(() => page.evaluate(() => ({ x: scrollX, y: scrollY }))).toEqual({ x: 0, y: 0 });
   await recordHiddenSkipLink(page, testInfo, "health-zh-dark");
   await page.screenshot({ path: chineseScreenshot, fullPage: true });
   await testInfo.attach("health-zh-dark", { path: chineseScreenshot, contentType: "image/png" });
