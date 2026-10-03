@@ -256,6 +256,10 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
             ("/api/status", (&[][..], &[][..])),
             ("/api/settings", (&[][..], &[][..])),
             (
+                "/api/health",
+                (&["sourceId", "maxAgeMs"][..], &["sourceId"][..]),
+            ),
+            (
                 "/api/overview",
                 (&["sourceId", "maxAgeMs"][..], &["sourceId"][..]),
             ),
@@ -342,6 +346,7 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
         let result = match path.as_str() {
             "/api/status" => store.get_status(),
             "/api/settings" => store.get_settings(),
+            "/api/health" => store.get_health(&input),
             "/api/overview" => store.get_overview(&input),
             "/api/quota" => store.get_quota(&input),
             "/api/daily" => store.get_daily_usage(&input),

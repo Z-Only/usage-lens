@@ -20,19 +20,31 @@ integration have not been tested.
    session inputs, not automatically discovered settings. Review `status` to confirm
    the source; ask the user if its identity is ambiguous
 4. Use `usage-summary` to request a summary. Its CLI allowlist is `status`,
-   `overview`, `daily`, `quota`, `tools`, `skill-summary`, and `response-tokens`. It does not
+   `overview`, `daily`, `quota`, `tools`, `skill-summary`, `response-tokens`, and `health`. It does not
    collect, import, inspect content, or fix a missing store by creating one
 
 `skill-summary` returns aggregate skill counts and coverage, matching MCP
 `usage_skills`. It supports `--source` and optional `--max-age-ms`, not date/model
 filters. The existing `skills` command returns local evidence records and is
-excluded from conversational queries.
+excluded from conversational queries. `health` / MCP `usage_health` reports
+selected-source collection and stored-evidence aggregates with optional
+`--max-age-ms`, without date/model filters. Missing/unsupported methods, stale or
+future collection times, source-reported `sourceAsOf`, and past failures stay
+separate. Local counts and time bounds do not prove complete historical coverage.
+
+Run `usage-lens doctor` as a separate local setup diagnostic after binary verification.
+It checks the running binary and embedded dashboard; an optional explicit `--db`
+and `--source` check the existing store read-only. `--max-age-ms` requires a source.
+It returns JSON and exits 1 when a check fails. It does not scan configuration,
+launch subprocesses, contact services, install clients, read credentials, or repair
+the store. `doctor` is outside the conversational Skill.
 
 Example POSIX query after replacing the reviewed placeholders:
 
 ```sh
 '/ABSOLUTE/usage-lens' status --db '/ABSOLUTE/usage.sqlite'
 '/ABSOLUTE/usage-lens' skill-summary --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
+'/ABSOLUTE/usage-lens' health --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
 ```
 
 Windows PowerShell:
@@ -40,6 +52,7 @@ Windows PowerShell:
 ```powershell
 & 'C:\ABSOLUTE\usage-lens.exe' status --db 'C:\ABSOLUTE\usage.sqlite'
 & 'C:\ABSOLUTE\usage-lens.exe' skill-summary --db 'C:\ABSOLUTE\usage.sqlite' --source 'SOURCE'
+& 'C:\ABSOLUTE\usage-lens.exe' health --db 'C:\ABSOLUTE\usage.sqlite' --source 'SOURCE'
 ```
 
 Prefer a subprocess executable/argument vector without a shell; otherwise quote
@@ -47,8 +60,8 @@ paths and values for the actual host shell. Installing the instruction-only Skil
 does not grant local execution permissions. The local database must already have
 been created and populated through separately authorized workflows. The dashboard,
 hooks, imports, and collectors remain independent of conversational setup.
-Persisted queries require a schema-2 rollback-journal store; normal v0.1.0 stores
-remain compatible. They fail rather than create or migrate a database. See the
+Persisted queries require a schema-2 rollback-journal store; normal v0.1.0 and v0.1.1 stores
+remain compatible without migration in v0.2.0. They fail rather than create or migrate a database. See the
 [query compatibility notes](../../docs/AI_INSTALL.md#supply-the-three-explicit-query-inputs)
 for safe handling of `storage_error` and `unsupported_schema`.
 
@@ -64,7 +77,7 @@ Only if the user chooses MCP, review `examples/mcp.config.example.json`, replace
 the chosen absolute existing database path, and separately approve client setup.
 Use a client that supports local stdio MCP. Do not configure or start MCP merely
 because the Skill was installed, and do not switch to it automatically if CLI
-execution is unavailable. The seven tools query the same existing aggregates;
+execution is unavailable. The eight tools query the same existing aggregates;
 they never launch Codex, refresh data, or expose stored content.
 
 Cloud-only ChatGPT cannot directly run a local CLI or connect to local stdio or

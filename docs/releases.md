@@ -13,6 +13,25 @@ Usage Lens follows [Semantic Versioning](https://semver.org/). The initial publi
 
 The publishing pipeline currently accepts stable `vMAJOR.MINOR.PATCH` tags only, with no leading zeros. Prerelease/build-metadata tags require a reviewed workflow change first. All source, workflow, version, and changelog changes go through a PR and the required tests.
 
+## v0.2.0 collection-health compatibility
+
+This minor release adds collection-health aggregates and local setup diagnostics;
+it does not migrate the database. Existing schema-2 rollback-journal stores from
+v0.1.0 and v0.1.1 remain compatible. Binary rollback remains schema-compatible for
+these additions, although older binaries do not expose `doctor`, `health` or
+`usage_health`. Keep the normal closed-store backup and side-by-side installation
+practice; do not treat schema compatibility as permission to overwrite a store.
+
+`doctor` is a local setup command. `health` is the eighth allowed conversational
+CLI aggregate and `usage_health` the eighth optional MCP tool. Neither command
+installs an incremental/background daemon, initiates collection, scans client
+configuration, accesses credentials, or reaches the network. The health view
+reports partial local evidence; no full-history or actual-client coverage is added.
+
+Version metadata and a changelog entry prepare a release; publication still requires
+the exact reviewed commit and all checks below. Consult [verification notes](verification.md)
+for tested and pending checks, without carrying older results forward to a new head.
+
 ## Native artifacts
 
 | Platform ID | Actual GitHub runner | Rust target |
@@ -28,7 +47,7 @@ Each `.tar.gz` contains the native executable, embedded WebAssembly UI, bundled 
 
 The Linux executable uses static musl and is smoke-tested on Ubuntu 24.04; it does not require an installed glibc version. The build checks that it has no dynamic ELF interpreter. Older kernels, CentOS 7, and Alpine are not claimed supported without tests. macOS builds set `MACOSX_DEPLOYMENT_TARGET=11.0` for both architectures and verify the produced Mach-O minimum using `otool`. Rust officially supports ARM64 from 11.0 and x64 from an earlier baseline ([Rust target requirements](https://doc.rust-lang.org/rustc/platform-support/apple-darwin.html)). This broadens the compiler/linker target without claiming runtime verification on macOS 11–14: CI runs on macOS 15 only. Windows builds use the static MSVC runtime and are tested on Server 2025; other Windows variants remain unverified. No ARM Linux, ARM Windows, 32-bit, older-OS compatibility, OS notarization, or code-signing claim is made. SHA-256 verifies integrity, not a publisher signature.
 
-Every platform extracts its own archive to a new temporary directory outside the checkout and runs the native CLI, SQLite create/reopen, synthetic demo HTTP and embedded UI, and MCP initialize/list/query smoke. The smoke creates only temporary synthetic data and an isolated home directory. No real account, installed Codex process, credentials, or user records are used.
+Every platform extracts its own archive to a new temporary directory outside the checkout and runs the native CLI including setup/health checks, SQLite create/reopen, synthetic demo HTTP and embedded UI, and MCP initialize/list/query smoke. The smoke creates only temporary synthetic data and an isolated home directory. No real account, installed Codex process, credentials, or user records are used.
 
 ## Prepare a release PR
 

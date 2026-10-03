@@ -896,5 +896,137 @@
       "perModel": "not_provided",
       "exactRemainingTokens": "not_provided"
     }
+  },
+  "health": {
+    "source": {
+      "id": "demo",
+      "mode": "demo",
+      "provider": "synthetic",
+      "accountBinding": "unverified"
+    },
+    "checkedAt": "2026-10-02T00:05:00Z",
+    "maxAgeMs": 900000,
+    "settings": {
+      "capturePaused": false,
+      "contentCaptureEnabled": false,
+      "retentionDays": 30,
+      "scope": "all_sources"
+    },
+    "observations": [
+      {
+        "method": "account/read",
+        "availability": "available",
+        "capability": "observed",
+        "freshness": {
+          "state": "fresh",
+          "observedAt": "2026-10-02T00:00:00Z",
+          "sourceAsOf": null,
+          "sourceAsOfStatus": "not_provided",
+          "ageMs": 300000,
+          "maxAgeMs": 900000,
+          "basis": "collection_time"
+        },
+        "lastFailure": null,
+        "provenance": {
+          "sourceId": "demo",
+          "provider": "synthetic",
+          "method": "account/read",
+          "adapterVersion": "test",
+          "schemaBaseline": "test",
+          "mode": "demo"
+        }
+      },
+      {
+        "method": "account/usage/read",
+        "availability": "available",
+        "capability": "observed",
+        "freshness": {
+          "state": "fresh",
+          "observedAt": "2026-10-02T00:00:00Z",
+          "sourceAsOf": null,
+          "sourceAsOfStatus": "not_provided",
+          "ageMs": 300000,
+          "maxAgeMs": 900000,
+          "basis": "collection_time"
+        },
+        "lastFailure": null,
+        "provenance": {
+          "sourceId": "demo",
+          "provider": "synthetic",
+          "method": "account/usage/read",
+          "adapterVersion": "test",
+          "schemaBaseline": "test",
+          "mode": "demo"
+        }
+      },
+      {
+        "method": "account/rateLimits/read",
+        "availability": "available",
+        "capability": "observed",
+        "freshness": {
+          "state": "fresh",
+          "observedAt": "2026-10-02T00:00:00Z",
+          "sourceAsOf": null,
+          "sourceAsOfStatus": "not_provided",
+          "ageMs": 300000,
+          "maxAgeMs": 900000,
+          "basis": "collection_time"
+        },
+        "lastFailure": null,
+        "provenance": {
+          "sourceId": "demo",
+          "provider": "synthetic",
+          "method": "account/rateLimits/read",
+          "adapterVersion": "test",
+          "schemaBaseline": "test",
+          "mode": "demo"
+        }
+      }
+    ],
+    "stored": {
+      "events": {
+        "count": "2",
+        "firstCapturedAt": "2026-10-01T00:00:00Z",
+        "lastCapturedAt": "2026-10-02T00:00:00Z",
+        "firstOccurredAt": null,
+        "lastOccurredAt": null,
+        "unknownOccurredAtCount": "2"
+      },
+      "skills": {
+        "count": "2",
+        "firstCapturedAt": "2026-10-01T00:00:00Z",
+        "lastCapturedAt": "2026-10-02T00:00:00Z",
+        "firstOccurredAt": null,
+        "lastOccurredAt": null,
+        "unknownOccurredAtCount": "2"
+      },
+      "responseTokens": {
+        "count": "2",
+        "firstCapturedAt": "2026-10-01T00:00:00Z",
+        "lastCapturedAt": "2026-10-02T00:00:00Z",
+        "firstOccurredAt": null,
+        "lastOccurredAt": null,
+        "unknownOccurredAtCount": "2"
+      },
+      "imports": {
+        "count": "1",
+        "firstImportedAt": "2026-10-02T00:00:00Z",
+        "lastImportedAt": "2026-10-02T00:00:00Z",
+        "warningCodes": [],
+        "warningCodesTruncated": false,
+        "importsExamined": "1"
+      }
+    },
+    "coverage": {
+      "completeness": "partial",
+      "missingRecords": "unknown",
+      "preCollectionHistory": "unknown"
+    },
+    "provenance": {
+      "basis": "stored_records",
+      "measurement": "measured",
+      "estimated": false
+    },
+    "warnings": []
   }
 }

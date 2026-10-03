@@ -54,3 +54,16 @@ Visual comparison with the retained design reference:
 6. Dark Chinese screenshots preserve the same hierarchy and visible controls; provider/model names and supplied provenance text remain source data
 
 Intentional deviations remain the functional source selector and explicit provenance/imported-response regions described above. Subsequent functional changes must rerun browser CI before release; the screenshot evidence is tied to the commit named here.
+
+## v0.2.0 collection-health card
+
+The selected source gains an aggregate collection-health card. It keeps observation
+availability, local collection freshness, source-reported freshness and retained
+failure evidence separate. Local stored-record counts and time bounds carry a
+partial-history caveat even when counts are zero. The card must not expose local
+content or individual record identities, silently collect on refresh, infer
+complete coverage from earliest/latest records, or style missing data as zero.
+
+The new card's English/Chinese, light/dark, narrow-width and source-switching
+behavior requires new browser evidence for the final release commit. The rendered
+verification above applies only to its named earlier commit.

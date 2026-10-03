@@ -6,6 +6,28 @@ Releases group useful features and fixes. Merging a PR does not automatically cr
 
 Further changes will be grouped here until a meaningful release is ready.
 
+## [0.2.0] - 2026-10-03
+
+Collection-health release preparation. Downloadable artifacts exist only after the exact-commit checks and release workflow have passed and published them; a version entry is not evidence of publication.
+
+### Added
+
+- Read-only `doctor` setup diagnostics for the running binary, embedded dashboard and an optional explicitly selected existing database/source, with JSON output and a failing exit status for failed checks
+- Source-scoped `health` aggregate query, optional eighth MCP tool `usage_health`, and a dashboard collection-health card
+- Separate observed/missing/unsupported method states, fresh/stale/future local collection times, source-reported `sourceAsOf`, and retained historical collection failures
+- Local stored event, skill-evidence, response and import counts with capture/occurrence bounds and unknown-time counts; preserve partial historical coverage rather than inferring zero use or complete history
+
+### Changed
+
+- Extend the self-contained Skill's aggregate allowlist from seven to eight commands with `health`; keep `doctor` outside the conversational workflow
+- Add setup/health interpretation, privacy boundaries and synthetic release smoke coverage to installation and release documentation
+
+### Compatibility and verification
+
+- No database migration or schema change: existing schema-2 rollback-journal stores from v0.1.0/v0.1.1 remain compatible. These additions do not change stored data, so binary rollback to those versions remains schema-compatible; their interfaces do not include the new commands
+- `doctor` and `health` do not discover configuration, launch subprocesses, use the network, read credentials, install clients or collect records. No incremental/background daemon is installed or claimed
+- Local checks for this release, exact-head browser/cross-platform CI and extracted release artifacts must be verified separately; see [verification notes](docs/verification.md). Synthetic tests do not establish real-client installation or live-account compatibility
+
 ## [0.1.1] - 2026-10-02
 
 ### Changed

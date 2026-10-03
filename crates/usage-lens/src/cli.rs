@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 pub const HELP: &str = concat!(
     "Usage Lens ",
     env!("CARGO_PKG_VERSION"),
-    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, collect, hook, serve, mcp\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N]\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
+    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: doctor, health, status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, collect, hook, serve, mcp\nDoctor: [--db /absolute/existing.sqlite [--source ID [--max-age-ms N]]]\n  Read-only setup checks; no scanning, installation, startup, or collection.\nHealth: --source ID [--max-age-ms N]; source evidence and collection freshness only\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N]\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
 );
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
@@ -35,6 +35,7 @@ pub fn parse_arguments(argv: &[String]) -> Result<Arguments, AdapterError> {
     }
     let allowed: &[&str] = match command.as_str() {
         "status" | "mcp" => &[],
+        "doctor" | "health" => &["source", "max-age-ms"],
         "overview" | "quota" | "skill-summary" => &["source", "max-age-ms"],
         "daily" => &["source", "from", "to", "max-age-ms"],
         "response-tokens" | "tools" => &["source", "from", "to", "model"],
@@ -230,6 +231,33 @@ async fn execute(
     {
         return Err(AdapterError("demo_command_not_allowed"));
     }
+    if command == "doctor" {
+        if demo {
+            return Err(AdapterError("demo_command_not_allowed"));
+        }
+        let database = flags.get("db").map(Path::new);
+        let source = flags.get("source").map(String::as_str);
+        let age = flags
+            .get("max-age-ms")
+            .map(|value| integer(value))
+            .transpose()?;
+        if database.is_some_and(|path| !path.is_absolute()) {
+            return Err(AdapterError("absolute_database_path_required"));
+        }
+        if (source.is_some() && database.is_none()) || (age.is_some() && source.is_none()) {
+            return Err(AdapterError("missing_argument"));
+        }
+        if age.is_some_and(|value| value > 2592000000) {
+            return Err(AdapterError("invalid_argument"));
+        }
+        let report = crate::doctor::report(database, source, age);
+        emit(output, &report).await?;
+        return if report["status"] == "failed" {
+            Err(AdapterError("doctor_checks_failed"))
+        } else {
+            Ok(())
+        };
+    }
     let store = if demo {
         UsageStore::in_memory()?
     } else {
@@ -243,6 +271,7 @@ async fn execute(
         let read_only = matches!(
             command.as_str(),
             "status"
+                | "health"
                 | "overview"
                 | "daily"
                 | "quota"
@@ -462,6 +491,7 @@ async fn execute(
                         }
                     }
                     Some(match command.as_str() {
+                        "health" => store.get_health(&params)?,
                         "overview" => store.get_overview(&params)?,
                         "daily" => {
                             required(&flags, "from")?;

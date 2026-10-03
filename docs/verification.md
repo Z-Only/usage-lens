@@ -61,3 +61,56 @@ The local pre-publication gate passed 176 Rust tests, 63 Python build/gate/plugi
 New synthetic regressions verify that ordinary queries and optional MCP startup do not create missing databases or migrate old schemas, retain database bytes/mtime and directory contents, reject pre-existing WAL stores, deny writes through the read-only handle, and preserve normal concurrent rollback-journal reads/writes. OS access timestamps and external concurrent path/journal-mode changes are outside that guarantee.
 
 Independent source review caught and corrected a disclosure mismatch before publication: local `skills` returns individual evidence, so the conversational Skill now uses the new `skill-summary` aggregate command. CLI and MCP share the same projection; runtime tests compare the shape and exclude individual record/correlation IDs and content canaries. Local evidence remains available only through separate local workflows. Standalone Skill copy instructions were tested under a synthetic temporary home, not installed into a real client. Exact new-commit browser/cross-platform CI and release verification remain separate requirements.
+
+## v0.2.0 collection-health validation checkpoint
+
+The final local pre-publication gate on 2026-10-03 passed 201 Rust tests and 64
+Python build/gate/plugin tests, plus formatting, static checks, native/WASM Clippy,
+a fresh Leptos build and native build. Total production line coverage was
+6350/6677 (95.1026%); changed executable lines against
+`a4b7a7d583f176dfc0cd21e0f19ee55de7d1b5e6` were 416/419 (99.2840%). The same
+216 unmeasured browser-bridge lines remain counted uncovered; no runtime source
+records are missing. Separately, all 38 synthetic release-tool tests, the official
+MCP SDK compatibility check and E2E TypeScript check passed. The updated release
+smoke script passed against the freshly built debug executable, including
+SQLite persistence, doctor/health read-only invariants, embedded UI/loopback HTTP
+and all eight MCP tools; this is not an extracted release-archive or cross-platform
+package result.
+
+Local rendered QA remains blocked before page load: the official Playwright
+installer could not extract Chromium v1243 (153.0.8010.12) downloaded from
+`cdn.playwright.dev`, reporting “End of central directory record signature not
+found.” No alternate host or existing browser profile was used. New synthetic
+health tests cover 1440/390/320px, failed request/retry, delayed source switching,
+large exact counts, English/light and Chinese/dark with screenshot attachments;
+their actual execution and pixel review require the new commit's browser CI.
+
+Exact-commit remote CI and packaged platform checks are still required before
+publication. Earlier browser/package results above remain tied to their named
+checkpoints. These synthetic checks did not install a Skill or plugin into a real
+client, read a live account, exercise installed hooks, or test a daemon.
+
+The new regression scope includes `doctor` with and without an explicit store,
+failed diagnostic exit status, no-create/no-migrate read-only selected-store
+checks, source-scoped health CLI/MCP/HTTP parity, missing/unsupported observations,
+fresh/stale/future collection timestamps, retained older failures, unknown source
+timestamps, local count/time bounds, empty/partial historical coverage, and
+aggregate exclusion of content and individual record identities. Plugin examples
+must allow exactly eight query commands and keep `doctor` in setup only. Extracted
+artifact smoke must exercise diagnostics, health and the eighth MCP tool.
+
+New dashboard health-card layout and interaction checks require the actual v0.2.0
+browser run; old screenshots cannot establish the changed UI's rendered behavior.
+
+
+### Health screenshot capture correction
+
+The initial PR browser run at commit
+`72432921517b7497e725834cf2e8821620c23ab2` passed its nine synthetic checks. Review of its mobile health-panel
+screenshots found a capture artifact: cropping a panel taller than the viewport
+could reposition the unfocused fixed skip link into the image, even though the
+link was above the real viewport. The follow-up changes only test capture to
+full-page screenshots, attaches successful offscreen skip-link geometry, and adds
+an isolated keyboard Tab/Enter check for visible focus and navigation to main
+content. Application CSS is unchanged. The follow-up's actual browser execution
+and corrected screenshot review remain requirements of its exact-commit CI.

@@ -1,11 +1,11 @@
-//! Narrow MCP stdio implementation: initialize, ping, tools/list and seven read-only aggregate tools.
+//! Narrow MCP stdio implementation: initialize, ping, tools/list and eight read-only aggregate tools.
 //! Newline JSON-RPC frames are capped at 64 KiB. No detail, paths, SQL, or collection methods exist.
 use crate::{adapters::AdapterError, core::UsageStore};
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 
 pub const INSTRUCTIONS: &str = "Read-only aggregates from an existing local store. Never equate missing data with zero, quota percent with remaining tokens, or partial events with complete ChatGPT history. Demo sources contain synthetic data. No collection is triggered by a query.";
-const NAMES: [&str; 7] = [
+const NAMES: [&str; 8] = [
     "usage_status",
     "usage_overview",
     "usage_daily",
@@ -13,6 +13,7 @@ const NAMES: [&str; 7] = [
     "usage_tools",
     "usage_skills",
     "usage_response_tokens",
+    "usage_health",
 ];
 pub fn tools_list() -> Value {
     let descriptions = [
@@ -23,6 +24,7 @@ pub fn tools_list() -> Value {
         "Aggregate observed tool counts; coverage is partial.",
         "Aggregate counts of direct skill evidence, keeping requested, loaded and invoked separate.",
         "Aggregate imported per-response token evidence; partial and never combined with account usage or quota.",
+        "Stored source counts, evidence gaps, collection freshness and failures; no collection or completeness inference.",
     ];
     let tools:Vec<Value>=NAMES.iter().zip(descriptions).map(|(name,description)|{
         let mut properties=json!({});let mut required=Vec::new();
@@ -165,6 +167,7 @@ impl McpSession {
                 }
                 let value = match name {
                     "usage_status" => store.get_status(),
+                    "usage_health" => store.get_health(&args),
                     "usage_overview" => store.get_overview(&args),
                     "usage_daily" => store.get_daily_usage(&args),
                     "usage_quota" => store.get_quota(&args),

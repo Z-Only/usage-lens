@@ -17,7 +17,7 @@ automatic database discovery, or a background service. The user supplies the exa
 native executable, existing database path, and intended source. A missing store or
 failed query must remain an error, not trigger collection or demo substitution.
 The query Skill allows only `status`, `overview`, `daily`, `quota`, `tools`, `skill-summary`,
-and `response-tokens`; broader local commands stay outside that workflow.
+`response-tokens`, and `health`; broader local commands stay outside that workflow.
 `skill-summary` shares only aggregate counts/coverage, equivalent to MCP
 `usage_skills`. The local `skills` command exposes individual evidence records and
 must not be called through this Skill or used as an aggregate fallback. This
@@ -26,6 +26,12 @@ Persisted query commands use a read-only SQLite connection and require a current
 schema-2 rollback-journal store. They never create a missing database or migrate an
 old schema. Errors intentionally omit database paths and contents. A failed query
 must not trigger SQLite/PRAGMA commands or writable setup through the Skill.
+`health` and optional MCP `usage_health` return selected-source aggregate counts,
+time bounds, collection states and safe failure metadata; no retained bodies,
+record identities, file fingerprints, credentials or local paths are returned.
+`doctor` is a separate setup diagnostic outside the Skill. It checks the running
+binary/embedded dashboard and an optional explicitly selected read-only database,
+without configuration discovery, subprocesses, network access or repair.
 
 Local execution does not make the assistant's answer local: returned aggregates
 are shared with its provider. Do not upload the database or pass raw content to an

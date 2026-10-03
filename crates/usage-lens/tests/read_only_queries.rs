@@ -5,6 +5,7 @@ use usage_lens::{adapters::demo::seed_demo, cli::run_main, core::UsageStore};
 
 const QUERIES: &[&str] = &[
     "status",
+    "health",
     "overview",
     "daily",
     "quota",
