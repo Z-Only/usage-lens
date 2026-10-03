@@ -46,7 +46,7 @@ https://github.com/Z-Only/usage-lens/releases/download/v0.6.0/usage-lens-0.6.0-m
 In a new temporary download directory, the following POSIX example downloads only public release files. Set `platform` from the table, and set `version` to the version the user selected:
 
 ```sh
-version=0.4.0
+version=0.6.0
 platform=macos-arm64
 asset="usage-lens-${version}-${platform}.tar.gz"
 manifest="usage-lens-${version}-${platform}.manifest.json"

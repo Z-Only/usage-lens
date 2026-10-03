@@ -121,6 +121,19 @@ class NativePluginExamplesTests(unittest.TestCase):
         self.assertIn('Never transmit raw bodies', boundary)
         self.assertIn('not an OS sandbox', boundary)
 
+    def test_installer_download_examples_match_current_product_version(self):
+        version = json.loads((ROOT / 'package.json').read_text())['version']
+        guide = (ROOT / 'docs/AI_INSTALL.md').read_text()
+        download = guide.split('## 3.', 1)[1].split('## 4.', 1)[0]
+        self.assertEqual(re.findall(r'^version=([0-9]+\.[0-9]+\.[0-9]+)$', download, re.M), [version])
+        tags = re.findall(r'releases/download/v([0-9]+\.[0-9]+\.[0-9]+)/', download)
+        self.assertTrue(tags)
+        self.assertEqual(set(tags), {version})
+        install = guide.split('## 2.', 1)[1].split('## 4.', 1)[0]
+        assets = re.findall(r'usage-lens-([0-9]+\.[0-9]+\.[0-9]+)-(?:linux|macos|windows)', install)
+        self.assertGreaterEqual(len(assets), 4)
+        self.assertEqual(set(assets), {version})
+
     def test_install_contract_is_local_skill_first_with_client_limits(self):
         guide = (ROOT / 'docs/AI_INSTALL.md').read_text()
         primary = guide.index('## 6. Primary conversational integration: Skill + local CLI')

@@ -976,3 +976,148 @@ fn bounded_group_streaming_preserves_counts_for_retained_keys() {
     assert_eq!(groups[0]["value"], "aaa");
     assert_eq!(groups[499]["value"], "model-498");
 }
+
+// The shared core budget includes structural overhead; it is not serialized
+// UTF-8 length. Find a valid ASCII boundary and prove one more byte exceeds it.
+fn fill_to_budget(value: &mut Value, pointer: &str, budget: usize) {
+    use usage_lens::core::validation::check_size;
+    let (mut low, mut high) = (0, budget);
+    while low < high {
+        let middle = low + (high - low).div_ceil(2);
+        *value.pointer_mut(pointer).unwrap() = json!("x".repeat(middle));
+        if check_size(value, budget).is_ok() {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    *value.pointer_mut(pointer).unwrap() = json!("x".repeat(low + 1));
+    assert_eq!(
+        check_size(value, budget).unwrap_err().code(),
+        "input_too_large"
+    );
+    *value.pointer_mut(pointer).unwrap() = json!("x".repeat(low));
+    check_size(value, budget).unwrap();
+}
+fn sized_projection(size: usize) -> Value {
+    let mut value =
+        json!({"projection":"visible_text_only","messages":[{"role":"user","text":""}]});
+    fill_to_budget(&mut value, "/messages/0/text", size);
+    value
+}
+fn sized_import(size: usize) -> Value {
+    use usage_lens::core::validation::{CONTENT_BYTES, check_size};
+    let attempts = (0..4)
+        .map(|index| {
+            let mut value = attempt(&format!("normalized-{index}"));
+            value["requestProjection"] = if index < 3 {
+                sized_projection(CONTENT_BYTES)
+            } else {
+                sized_projection(128)
+            };
+            value["responseProjection"] = Value::Null;
+            value
+        })
+        .collect::<Vec<_>>();
+    let mut result = bundle("normalized-size", attempts);
+    fill_to_budget(
+        &mut result,
+        "/attempts/3/requestProjection/messages/0/text",
+        size,
+    );
+    for attempt in result["attempts"].as_array().unwrap() {
+        check_size(&attempt["requestProjection"], CONTENT_BYTES).unwrap();
+    }
+    result
+}
+
+#[test]
+fn every_projection_limit_rejects_atomically_even_with_capture_off() {
+    use usage_lens::core::validation::{BATCH_EVENTS, CONTENT_BYTES, RAW_BYTES};
+    for capture in [false, true] {
+        for schema in [2, 3, 4] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("bounded.sqlite");
+            let store = UsageStore::open(&path).unwrap();
+            source(&store, "synthetic", "imported");
+            store
+                .update_settings(&json!({"contentCaptureEnabled":capture}))
+                .unwrap();
+            if schema == 3 {
+                import_incremental_rollout(&store,b"",&json!({"sourceId":"synthetic","streamId":"empty","observedAt":NOW,"sourceVersion":ROLLOUT_SOURCE_VERSION})).unwrap();
+            } else if schema == 4 {
+                store
+                    .import_trace_bundle(&bundle("seed", vec![attempt("seed")]))
+                    .unwrap();
+            }
+            let before = std::fs::read(&path).unwrap();
+            let before_summary = summary(&store);
+            let mut large = attempt("oversize-projection");
+            large["requestProjection"] = sized_projection(CONTENT_BYTES + 1);
+            let mut many = attempt("too-many-messages");
+            many["requestProjection"]["messages"] =
+                json!(vec![json!({"role":"user","text":"x"}); BATCH_EVENTS + 1]);
+            for (input, code) in [
+                (bundle("large-projection", vec![large]), "input_too_large"),
+                (bundle("many-messages", vec![many]), "invalid_input"),
+                (sized_import(RAW_BYTES + 1), "input_too_large"),
+            ] {
+                assert_eq!(
+                    store.import_trace_bundle(&input).unwrap_err().code(),
+                    code,
+                    "capture={capture},schema={schema}"
+                );
+                assert_eq!(version(&store), schema);
+                assert_eq!(summary(&store), before_summary);
+                assert_eq!(
+                    std::fs::read(&path).unwrap(),
+                    before,
+                    "Rejected import changed persisted state"
+                );
+            }
+            // A rejection creates no replay marker: the same bundle/attempt identity can
+            // subsequently be accepted when independently supplied within all bounds.
+            let mut bounded = attempt("oversize-projection");
+            bounded["requestProjection"] = sized_projection(CONTENT_BYTES);
+            assert_eq!(
+                store
+                    .import_trace_bundle(&bundle("large-projection", vec![bounded]))
+                    .unwrap()["attemptsInserted"],
+                "1"
+            );
+            assert_eq!(
+                detail(&store, "oversize-projection")["contentRetained"],
+                capture
+            );
+        }
+    }
+}
+#[test]
+fn exact_normalized_and_message_count_boundaries_are_supported_for_both_capture_modes() {
+    use usage_lens::core::validation::{BATCH_EVENTS, RAW_BYTES};
+    for capture in [false, true] {
+        let store = store();
+        store
+            .update_settings(&json!({"contentCaptureEnabled":capture}))
+            .unwrap();
+        let input = sized_import(RAW_BYTES);
+        assert_eq!(
+            store.import_trace_bundle(&input).unwrap()["attemptsInserted"],
+            "4"
+        );
+        let mut value = attempt("message-boundary");
+        value["requestProjection"]["messages"] =
+            json!(vec![json!({"role":"user","text":"x"}); BATCH_EVENTS]);
+        assert_eq!(
+            store
+                .import_trace_bundle(&bundle("messages", vec![value]))
+                .unwrap()["attemptsInserted"],
+            "1"
+        );
+        assert_eq!(summary(&store)["attemptCount"], "5");
+        assert_eq!(
+            detail(&store, "message-boundary")["contentRetained"],
+            capture
+        );
+    }
+}

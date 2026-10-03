@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { captureOverflowDiagnostics } from "./layout-diagnostics";
 
 type Cell = { state: string; value: string | null };
@@ -38,6 +38,66 @@ async function summaryRoute(page: Page) {
 async function noOverflow(page: Page, testInfo: TestInfo) {
   try { await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); }
   catch (error) { await captureOverflowDiagnostics(page, testInfo); throw error; }
+}
+async function captureProjection(page: Page, dialog: Locator, heading: string, visibleText: string, filename: string, testInfo: TestInfo) {
+  const section = dialog.locator(".trace-projections .reader-section").filter({
+    has: page.getByRole("heading", { name: heading, exact: true }),
+  });
+  const body = section.locator(".content-body");
+  await expect(body).toContainText('"projection": "visible_text_only"');
+  await expect(body).toContainText(visibleText);
+  await section.scrollIntoViewIfNeeded();
+  await body.scrollIntoViewIfNeeded();
+  try {
+    await expect(body).toBeInViewport({ ratio: 1 });
+    await expect.poll(() => body.evaluate((element, expectedText) => {
+      const drawer = element.closest("dialog")!;
+      const drawerRect = drawer.getBoundingClientRect();
+      const bodyRect = element.getBoundingClientRect();
+      // Check the drawer's scrollport as well as the viewport: visibility alone
+      // does not prove that a body below the drawer's fold appears in a capture.
+      const clip = {
+        left: Math.max(0, drawerRect.left + drawer.clientLeft),
+        right: Math.min(innerWidth, drawerRect.left + drawer.clientLeft + drawer.clientWidth),
+        top: Math.max(0, drawerRect.top + drawer.clientTop),
+        bottom: Math.min(innerHeight, drawerRect.top + drawer.clientTop + drawer.clientHeight),
+      };
+      const inside = (rect: DOMRect, bounds: typeof clip) => rect.width > 0 && rect.height > 0
+        && rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1
+        && rect.top >= bounds.top - 1 && rect.bottom <= bounds.bottom + 1;
+      const textClip = {
+        left: Math.max(clip.left, bodyRect.left + element.clientLeft),
+        right: Math.min(clip.right, bodyRect.left + element.clientLeft + element.clientWidth),
+        top: Math.max(clip.top, bodyRect.top + element.clientTop),
+        bottom: Math.min(clip.bottom, bodyRect.top + element.clientTop + element.clientHeight),
+      };
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let readableText = false;
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const start = node.textContent?.indexOf(expectedText) ?? -1;
+        if (start < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, start);
+        range.setEnd(node, start + expectedText.length);
+        const rects = [...range.getClientRects()];
+        readableText = rects.length > 0 && rects.every(rect => inside(rect, textClip));
+        break;
+      }
+      return {
+        bodyInsideDrawerAndViewport: inside(bodyRect, clip),
+        readableText: readableText && parseFloat(getComputedStyle(element).fontSize) >= 11,
+        // A pre may intentionally scroll internally; its overflow must never
+        // widen the containing drawer or push content off the page.
+        drawerHasNoHorizontalOverflow: drawer.scrollWidth <= drawer.clientWidth + 1,
+      };
+    }, visibleText)).toEqual({
+      bodyInsideDrawerAndViewport: true,
+      readableText: true,
+      drawerHasNoHorizontalOverflow: true,
+    });
+  } catch (error) { await captureOverflowDiagnostics(page, testInfo); throw error; }
+  await noOverflow(page, testInfo);
+  await page.screenshot({ path: testInfo.outputPath(filename), fullPage: false });
 }
 
 // Same-origin synthetic trace payloads only. Projects cover desktop, 390px and 320px.
@@ -93,7 +153,12 @@ for (const locale of ["en", "zh"] as const) {
     await expect(dialog).toContainText("observed-model");
     await expect(dialog.getByRole("button", { name: text("Close trace detail", "关闭追踪详情") })).toBeFocused();
     await noOverflow(page, testInfo);
+    // Preserve the initial metadata view, then capture each projection body.
     await page.screenshot({ path: testInfo.outputPath(`trace-projection-${locale}.png`), fullPage: false });
+    await captureProjection(page, dialog, text("Prepared request projection", "已准备请求投影"),
+      "synthetic visible prompt [REDACTED]", `trace-request-projection-${locale}.png`, testInfo);
+    await captureProjection(page, dialog, text("Visible response projection", "可见响应投影"),
+      "Synthetic visible response", `trace-response-projection-${locale}.png`, testInfo);
     await dialog.getByRole("button", { name: text("Back to traces", "返回追踪"), exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(opener).toBeFocused();

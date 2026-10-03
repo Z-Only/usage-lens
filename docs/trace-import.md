@@ -243,14 +243,28 @@ fit. Limits cover the selected bundle, not all historical traces:
 - Individual payload: 2 MiB; combined bounded input: 32 MiB
 - At most 20,000 trace events, 1,000 attempts and 2,000 referenced payloads
 - JSON nesting depth: 32; payload ordinals contain at most 20 digits
-- Normalized import JSON: 2 MiB; each visible-text projection: 512 KiB and at most
-  1,000 messages, independently of the larger raw-input budget
+- Normalized import: 2 MiB core validation budget; each visible-text projection:
+  512 KiB core validation budget and at most 1,000 messages, independently of the
+  larger raw-input budget. Core budgets account for structural overhead and are
+  not an exact serialized JSON-file byte allowance
 - Referenced paths match the pinned writer's `payloads/[1-9][0-9]*.json` shape and
   its `raw_payload:<ordinal>` identity; absolute paths, traversal and linked paths
   are rejected
 - Windows bundle roots must be local drive paths; UNC, network and device roots
   are rejected before any opening. Symlinks/reparse points and linked ancestors
   remain unsupported
+
+These limits are cumulative requirements, not alternative budgets. A request can
+fit the 2 MiB raw-payload limit yet exceed the 512 KiB visible-projection limit;
+several individually valid projections can exceed the 2 MiB normalized-import
+limit. Either case rejects the entire import, including when content capture is
+off. The importer never silently clips messages or commits only token metadata.
+Content capture controls persistence after validation; it does not bypass the
+canonical projection used to detect conflicting replay and prevent content
+backfill. `input_too_large` or `invalid_input` at these limits leaves existing
+store rows, replay state and schema unchanged. Disabling content capture is not a
+size-limit workaround. Use a smaller, independently complete source bundle;
+do not rewrite an already accepted bundle or remove evidence to make it fit.
 
 Only explicitly referenced supported payloads are read; this is not directory
 recursion or an arbitrary-file endpoint. Missing files, malformed/incompatible

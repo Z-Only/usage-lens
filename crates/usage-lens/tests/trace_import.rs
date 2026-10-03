@@ -790,3 +790,33 @@ fn rejects_windows_network_and_device_roots_before_opening() {
         );
     }
 }
+
+#[test]
+fn raw_payload_budget_does_not_override_projection_budget_when_content_capture_is_off() {
+    use usage_lens::core::validation::CONTENT_BYTES;
+    let mut req = request();
+    req["input"] = json!([message("user", &"x".repeat(CONTENT_BYTES))]);
+    let mut supplied = payloads();
+    supplied.insert("payloads/1.json".into(), bytes(&req));
+    assert!(supplied["payloads/1.json"].len() < MAX_PAYLOAD_BYTES);
+    let parsed = parse(&manifest(), &[started(), completed()], &supplied).unwrap();
+    assert!(parsed["attempts"][0]["requestProjection"].to_string().len() > CONTENT_BYTES);
+    for capture in [false, true] {
+        let store = UsageStore::in_memory().unwrap();
+        store.create_source(&json!({"id":"local","mode":"imported","displayName":"Local","provider":"synthetic","coverageDescription":"Synthetic only"})).unwrap();
+        store
+            .update_settings(&json!({"contentCaptureEnabled":capture}))
+            .unwrap();
+        assert_eq!(
+            store.import_trace_bundle(&parsed).unwrap_err().code(),
+            "input_too_large"
+        );
+        assert_eq!(store.get_status().unwrap()["schemaVersion"], 2);
+        assert_eq!(
+            store
+                .get_trace_summary(&json!({"sourceId":"local"}))
+                .unwrap()["attemptCount"],
+            "0"
+        );
+    }
+}
