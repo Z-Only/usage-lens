@@ -233,3 +233,46 @@ configuration using installed Chromium was blocked by the environment's socket
 restrictions before any page loaded. That temporary configuration was removed.
 No browser pass is claimed. Exact-commit CI browser execution, all four native
 platform jobs and extracted release-package smoke remain required before release.
+
+## v0.5.0 message reading and token-period checkpoint (2026-10-03)
+
+This checkpoint adds a local retained-content reader, event/model count drilldowns,
+bounded metadata-filtered content search, and an explicit known-occurrence token
+period beside independently reported quota windows. It does not establish actual
+remote-send payloads or per-message token/quota attribution. See
+[message reading](message-reading.md) for the contract and privacy limits.
+
+The local source gate ran against base
+`d24b0d961dd721225326f18febe5106e7a9911bb` (tree
+`5ffc71e236c5134e6b7b6f472b59c6061fbc27d3`) with 287 Rust tests passing,
+69 Python gate/static/build tests, native and WASM Clippy with `-D warnings`,
+formatting, the Leptos production build, embedded native build and complete LCOV
+inventory. Total production line coverage is **7765 / 8126 = 95.5575%**;
+changed executable coverage is **555 / 560 = 99.1071%**. No production file was
+missing. The same conservative 216 unmeasured bridge/bootstrap physical lines
+remain uncovered; native/SSR evidence is not browser source coverage.
+
+Additional local checks passed: E2E TypeScript checking, official-SDK MCP
+compatibility, 38 synthetic release-tool tests, and the updated release smoke
+script against the freshly built **debug executable**. That last check exercises
+new HTTP search continuation and known-date period contracts as well as existing
+schema/replay, CLI, embedded assets and aggregate-only MCP checks; it is not
+extracted release-package or cross-platform release evidence.
+
+The configured browser suite now has **27 tests** across desktop, 390px and 320px
+viewports. Its new flows cover event drilldown, message/tool/file reading, absent
+content, modal Escape/reopen/focus return, bounded-search notices, submitted-query
+pagination, delayed response/reset races, invalid-date retry, quota-period
+missingness and English/light plus Chinese/dark layout screenshots. Local
+Chromium could not launch: its process-singleton socket failed with
+`Operation not permitted`, including the approved escalation attempt. No page was
+reached and no local browser visual/interaction pass is claimed. Browser plugin
+runtime was unavailable; the attempted fallback used the installed system
+Chromium through a temporary Playwright config outside the repository. It did
+not change the standard committed CI configuration.
+
+Before merge/release, the exact commit still requires successful browser CI with
+inspection of the new screenshots, native Linux/macOS/Windows jobs, and extracted
+release-artifact smoke. A version/changelog entry is preparation, not publication.
+No real account, transcript, client hook, user computer or transport interception
+was used in this checkpoint; test data was synthetic.

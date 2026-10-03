@@ -1,5 +1,7 @@
 # Usage Lens
 
+Read local messages and tool arguments/results from Activity, drill down from event/model counts, and compare an explicit known-occurrence token period beside reported quota windows. See [message reading and quota context](docs/message-reading.md) for search limits, privacy, and why retained records do not prove actual remote-send payloads.
+
 Local usage evidence for AI workflows: a private loopback dashboard, Skill + local CLI queries, optional MCP, and explicit collectors/importers.
 
 中文：在本机查看可取得的 AI 使用记录、Token、官方额度窗口和 Skill／工具证据。对话查询默认使用 Skill + 本地 CLI，MCP 保留为可选项。正文与工具明细只在本地查看；通过助手查询时，仅返回所请求的统计。缺失记录不会被当作零，加载 Skill 不会被当作任务成功。

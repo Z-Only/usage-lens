@@ -93,6 +93,7 @@ pub enum Slot {
     History,
     ResponseUsage,
     ResponseRecords,
+    TokenPeriod,
     Detail,
     Mutation,
 }
@@ -118,21 +119,26 @@ pub struct Filters {
     pub event_type: String,
     pub model: String,
     pub skill_name: String,
+    pub content_query: String,
 }
 impl Filters {
     pub fn valid(&self) -> bool {
-        self.from.is_empty() || self.to.is_empty() || self.from <= self.to
+        (self.from.is_empty() && self.to.is_empty())
+            || self
+                .date_span()
+                .is_some_and(|days| (0..=3660).contains(&days))
     }
     pub fn skill_dates_valid(&self) -> bool {
+        self.date_span()
+            .is_some_and(|days| (0..366).contains(&days))
+    }
+    fn date_span(&self) -> Option<i64> {
         let parse = |value: &str| {
             NaiveDate::parse_from_str(value, "%Y-%m-%d")
                 .ok()
                 .filter(|date| date.format("%Y-%m-%d").to_string() == value)
         };
-        match (parse(&self.from), parse(&self.to)) {
-            (Some(from), Some(to)) => (0..366).contains(&(to - from).num_days()),
-            _ => false,
-        }
+        Some((parse(&self.to)? - parse(&self.from)?).num_days())
     }
 }
 #[derive(Clone, Debug, PartialEq)]
@@ -161,7 +167,9 @@ pub enum Action {
     Close,
     Filter(&'static str, String),
     ApplyFilters,
+    ApplyTokenPeriod,
     ResetFilters,
+    Drilldown(&'static str, String),
     SkillKind(String),
     Language(String),
     ToggleTheme,
@@ -180,6 +188,9 @@ pub struct State {
     pub source: String,
     pub remotes: BTreeMap<Slot, Remote>,
     pub filters: Filters,
+    pub applied_filters: Filters,
+    pub token_period: Filters,
+    pub applied_token_period: Filters,
     pub kind: String,
     pub selected: Value,
     pub settings: Value,
@@ -198,6 +209,9 @@ impl Default for State {
             source: String::new(),
             remotes: BTreeMap::new(),
             filters: Filters::default(),
+            applied_filters: Filters::default(),
+            token_period: Filters::default(),
+            applied_token_period: Filters::default(),
             kind: "requested".into(),
             selected: Value::Null,
             settings: json!({"capturePaused":false,"contentCaptureEnabled":false,"retentionDays":30}),
@@ -259,6 +273,13 @@ impl State {
             .into_iter()
             .collect()
     }
+    pub fn retry_action(&self, slot: Slot) -> Action {
+        match (slot, self.error(slot)) {
+            (Slot::Activity, "invalid_date_range") => Action::ApplyFilters,
+            (Slot::TokenPeriod, "invalid_token_period") => Action::ApplyTokenPeriod,
+            _ => Action::Load(slot, false),
+        }
+    }
     pub fn busy(&self) -> bool {
         self.loading(Slot::Mutation)
     }
@@ -292,13 +313,18 @@ impl State {
             Slot::Health => ("health", vec![("maxAgeMs", "900000".into())]),
             Slot::Recent => ("events", vec![("limit", "3".into())]),
             Slot::Activity => (
-                "events",
+                if self.applied_filters.content_query.is_empty() {
+                    "events"
+                } else {
+                    "events/search"
+                },
                 vec![
                     ("limit", "50".into()),
-                    ("fromDate", self.filters.from.clone()),
-                    ("toDate", self.filters.to.clone()),
-                    ("eventType", self.filters.event_type.clone()),
-                    ("model", self.filters.model.clone()),
+                    ("fromDate", self.applied_filters.from.clone()),
+                    ("toDate", self.applied_filters.to.clone()),
+                    ("eventType", self.applied_filters.event_type.clone()),
+                    ("model", self.applied_filters.model.clone()),
+                    ("query", self.applied_filters.content_query.clone()),
                 ],
             ),
             Slot::Skills => (
@@ -316,6 +342,13 @@ impl State {
             Slot::History => ("quota/history", vec![("limit", "20".into())]),
             Slot::ResponseUsage => ("response-tokens", vec![]),
             Slot::ResponseRecords => ("response-tokens/records", vec![("limit", "20".into())]),
+            Slot::TokenPeriod => (
+                "response-tokens/period",
+                vec![
+                    ("fromDate", self.applied_token_period.from.clone()),
+                    ("toDate", self.applied_token_period.to.clone()),
+                ],
+            ),
             Slot::Detail => (
                 "events/detail",
                 vec![("eventId", string(&self.selected["eventId"]).into())],
@@ -350,9 +383,12 @@ impl State {
         if self.source.is_empty() {
             vec![]
         } else {
-            let mut requests = vec![self.request(slot, false)];
+            let mut requests = self.dispatch(Action::Load(slot, false));
             if self.page == Page::Skills && self.filters.skill_dates_valid() {
                 requests.push(self.request(Slot::SkillSummary, false));
+            }
+            if self.page == Page::Quotas && self.applied_token_period.skill_dates_valid() {
+                requests.push(self.request(Slot::TokenPeriod, false));
             }
             requests
         }
@@ -383,7 +419,11 @@ impl State {
                 self.selected = Value::Null;
                 self.action = None;
                 self.invalidate(Slot::Detail);
-                self.load_page()
+                if page == Page::Activity {
+                    self.dispatch(Action::ApplyFilters)
+                } else {
+                    self.load_page()
+                }
             }
             Action::Load(slot, more) => {
                 if (slot != Slot::Status && slot != Slot::Mutation && self.source.is_empty())
@@ -391,6 +431,16 @@ impl State {
                         && (self.loading(slot)
                             || string(&self.data(slot)["nextCursor"]).is_empty()))
                 {
+                    return vec![];
+                }
+                if slot == Slot::Activity && !self.applied_filters.valid() {
+                    self.invalidate(slot);
+                    self.remotes.entry(slot).or_default().error = "invalid_date_range".into();
+                    return vec![];
+                }
+                if slot == Slot::TokenPeriod && !self.applied_token_period.skill_dates_valid() {
+                    self.invalidate(slot);
+                    self.remotes.entry(slot).or_default().error = "invalid_token_period".into();
                     return vec![];
                 }
                 if slot == Slot::SkillSummary && !self.filters.skill_dates_valid() {
@@ -424,6 +474,9 @@ impl State {
                     "eventType" => self.filters.event_type = value,
                     "model" => self.filters.model = value,
                     "skillName" => self.filters.skill_name = value,
+                    "query" => self.filters.content_query = value,
+                    "tokenFrom" => self.token_period.from = value,
+                    "tokenTo" => self.token_period.to = value,
                     _ => {}
                 }
                 if ["from", "to", "skillName"].contains(&field) {
@@ -431,26 +484,64 @@ impl State {
                 }
                 vec![]
             }
+            Action::ApplyTokenPeriod => {
+                if self.source.is_empty() {
+                    return vec![];
+                }
+                self.invalidate(Slot::TokenPeriod);
+                self.applied_token_period = self.token_period.clone();
+                if !self.token_period.skill_dates_valid() {
+                    self.remotes.entry(Slot::TokenPeriod).or_default().error =
+                        "invalid_token_period".into();
+                    return vec![];
+                }
+                vec![self.request(Slot::TokenPeriod, false)]
+            }
             Action::ApplyFilters => {
                 if self.page == Page::Skills {
                     return self.dispatch(Action::Load(Slot::SkillSummary, false));
                 }
+                if self.source.is_empty() {
+                    return vec![];
+                }
+                self.applied_filters = self.filters.clone();
                 if !self.filters.valid() {
+                    self.invalidate(Slot::Activity);
                     self.remotes.entry(Slot::Activity).or_default().error =
                         "invalid_date_range".into();
                     vec![]
                 } else {
+                    self.invalidate(Slot::Activity);
                     vec![self.request(Slot::Activity, false)]
                 }
             }
             Action::ResetFilters => {
                 self.filters = Filters::default();
                 self.invalidate(Slot::SkillSummary);
-                if self.page == Page::Skills {
+                self.applied_filters = Filters::default();
+                self.invalidate(Slot::Activity);
+                if self.page == Page::Skills || self.source.is_empty() {
                     vec![]
                 } else {
                     vec![self.request(Slot::Activity, false)]
                 }
+            }
+            Action::Drilldown(field, value) => {
+                if self.busy()
+                    || self.source.is_empty()
+                    || value.is_empty()
+                    || !["eventType", "model"].contains(&field)
+                {
+                    return vec![];
+                }
+                self.filters = Filters::default();
+                self.dispatch(Action::Filter(field, value));
+                self.page = Page::Activity;
+                self.selected = Value::Null;
+                self.action = None;
+                self.confirmation.clear();
+                self.invalidate(Slot::Detail);
+                self.dispatch(Action::ApplyFilters)
             }
             Action::SkillKind(kind) => {
                 if !["requested", "loaded", "invoked"].contains(&kind.as_str()) {
@@ -568,6 +659,13 @@ impl State {
             };
             if response_source != request.source {
                 current.error = "source_mismatch".into();
+                return vec![];
+            }
+            if request.slot == Slot::TokenPeriod
+                && (string(&value["fromDate"]) != self.applied_token_period.from
+                    || string(&value["toDate"]) != self.applied_token_period.to)
+            {
+                current.error = "filter_mismatch".into();
                 return vec![];
             }
             if request.slot == Slot::SkillSummary

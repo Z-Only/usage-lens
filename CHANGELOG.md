@@ -6,6 +6,27 @@ Releases group useful features and fixes. Merging a PR does not automatically cr
 
 Further changes will be grouped here until a meaningful release is ready.
 
+## [0.5.0] - 2026-10-03
+
+Message-reading and quota-context release preparation. This entry does not publish
+a release; exact-commit gates and extracted-artifact verification remain required.
+
+### Added
+
+- Bilingual local reading sections for retained message text, tool arguments/results and file text, with expandable JSON/metadata and explicit missing remote-send evidence
+- Event/model aggregate drilldowns and retained-content substring search with honest 10,000-candidate bounds, metadata filters, query-bound pagination and stale-response protection
+- An explicit UTC-date token period beside reported quota snapshots, using only known occurrence times, exact totals/model groups and separately disclosed source-wide undated exclusions
+- Weekly labels only for directly reported 10,080-minute windows; effort and Fast/Standard stay unrecorded where the response schema does not supply them
+- Synthetic native, HTTP, reducer, SSR and desktop/mobile browser coverage for reading, search, filter/pagination races, missing evidence and token-period boundaries
+
+### Compatibility and safety
+
+- No schema migration. Existing schema 2/3 compatibility and incremental replay rules remain unchanged; v0.4.0 can still read these stores
+- Content capture remains off by default and never backfills missing/deleted content; system/developer instructions, hidden reasoning and excluded skill payloads remain excluded
+- Skill/MCP aggregate allowlists are unchanged. Content search and detail remain local-only; no transport interception, credential collection, actual-send claim or fabricated response/event linkage is added
+- Selected token dates are not an inferred quota cycle. No reset-minus-seven-days start, fixed token allowance, effort/speed multiplier, per-message quota cost or credit/API-price conversion is inferred
+- See [message reading and quota context](docs/message-reading.md) for exact scopes and limitations
+
 ## [0.4.0] - 2026-10-03
 
 Incremental-record-import release preparation. This entry does not publish a

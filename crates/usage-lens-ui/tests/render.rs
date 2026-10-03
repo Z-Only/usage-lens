@@ -797,3 +797,192 @@ fn daily_skill_trends_escape_exact_skill_warnings_and_show_truncation_without_fa
     assert!(h.contains("limited to 500 entries"));
     assert!(h.contains("daily totals include all matching evidence"));
 }
+
+#[test]
+fn message_reader_displays_fields_without_turning_records_into_sent_payloads() {
+    use usage_lens_ui::reading::*;
+    for language in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.language = language;
+        s.selected = fixture("event");
+        let content = &mut s.remotes.get_mut(&Slot::Detail).unwrap().value["content"];
+        content["toolResult"] = json!("<script>literal result</script>");
+        let h = render_with(s, modal);
+        for label in [
+            language.text("Message body", "消息正文"),
+            language.text("Tool arguments", "工具参数"),
+            language.text("Tool result", "工具结果"),
+            language.text(
+                "Actual remote-send evidence unavailable",
+                "缺少实际远端发送证据",
+            ),
+            language.text("Recorded metadata", "已记录元数据"),
+            language.text("Inspect retained JSON", "查看保留 JSON"),
+            language.text("Retained file", "保留文件"),
+            language.text("Unknown · not recorded", "未知 · 未记录"),
+        ] {
+            assert!(h.contains(label), "missing {label}");
+        }
+        assert!(!h.contains("<script>"));
+        assert!(h.contains("&lt;script&gt;"));
+    }
+    assert_eq!(retained_text(&json!("a\nb")), "a\nb");
+    assert!(retained_text(&json!({"x":1})).contains("\n"));
+    for kind in EVENT_TYPES {
+        for language in [Language::English, Language::Chinese] {
+            assert!(!event_name(&json!(kind), language).is_empty());
+        }
+    }
+    assert_eq!(event_name(&json!("custom"), Language::English), "custom");
+    assert_eq!(event_name(&Value::Null, Language::Chinese), "未知");
+}
+
+#[test]
+fn empty_and_missing_reader_content_never_claims_recovery_or_success() {
+    use usage_lens_ui::reading::*;
+    for content in [
+        json!({}),
+        json!({"body":"","toolArguments":null,"toolResult":false}),
+        Value::Null,
+    ] {
+        let mut s = full();
+        s.selected = fixture("event");
+        s.remotes.get_mut(&Slot::Detail).unwrap().value["content"] = content.clone();
+        let html = render_with(s, modal);
+        if content.is_null() {
+            assert!(html.contains("Content unavailable"));
+        } else if content.get("body").is_some() {
+            assert!(html.contains("Empty retained text"));
+        } else {
+            assert!(html.contains("No allowed content fields were retained"));
+        }
+    }
+    let html = render_with(full(), |s, _| {
+        retained_content(
+            &json!({"contentRetained":false,"content":{"body":"must not appear"}}),
+            s.language,
+        )
+    });
+    assert!(!html.contains("must not appear"));
+    assert!(html.contains("does not recover earlier content"));
+}
+
+#[test]
+fn event_aggregate_links_are_exact_and_unknown_models_stay_unselectable() {
+    use usage_lens_ui::reading::activity_breakdown;
+    let mut s = full();
+    s.remotes.get_mut(&Slot::Overview).unwrap().value["events"] = json!({"byType":[{"name":"user_prompt","count":"9007199254740993"}],"byModel":[{"name":"model-a","count":"2"},{"name":null,"count":"1"}]});
+    let html = render_with(s, activity_breakdown);
+    assert!(html.contains("9,007,199,254,740,993"));
+    assert!(html.contains("User message"));
+    assert_eq!(html.matches("<button").count(), 2);
+    assert!(html.contains("unknown"));
+    let html = render_with(State::default(), activity_breakdown);
+    assert!(html.contains("No group evidence"));
+}
+
+#[test]
+fn search_copy_exposes_boundedness_applied_query_and_partial_results() {
+    use usage_lens_ui::reading::search_scope;
+    for language in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.language = language;
+        s.applied_filters.content_query = "<literal query>".into();
+        s.filters.content_query = "unapplied draft".into();
+        s.remotes.get_mut(&Slot::Activity).unwrap().value["search"] =
+            json!({"searchedRecordCount":"10000","matchedCount":"400","truncated":true});
+        let html = render_with(s, |s, _| search_scope(s));
+        assert!(html.contains("10,000"));
+        assert!(html.contains("&lt;literal query&gt;"));
+        assert!(!html.contains("unapplied draft"));
+        assert!(html.contains(language.text("Older retained content", "更早的保留内容")));
+    }
+    let mut s = full();
+    s.applied_filters.content_query = "q".into();
+    let html = render_with(s, |s, _| search_scope(s));
+    assert!(!html.contains("Matching retained records"));
+    let html = render_with(full(), |s, _| search_scope(s));
+    assert!(!html.contains("Applied query"));
+}
+
+#[test]
+fn quota_token_period_keeps_weekly_evidence_and_dated_tokens_separate() {
+    use usage_lens_ui::token_period::token_period_panel;
+    for language in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.language = language;
+        let mut result = fixture("responseUsage");
+        result["fromDate"] = json!("2026-10-01");
+        result["toDate"] = json!("2026-10-03");
+        result["undatedResponseCount"] = json!("9007199254740993");
+        result["byModelTruncated"] = json!(true);
+        result["importWarnings"] =
+            json!({"codes":["unsupported_record", "<escaped-code>"],"truncated":true});
+        put(&mut s, Slot::TokenPeriod, result);
+        let html = render_with(s, token_period_panel);
+        assert!(html.contains("9,007,199,254,740,993"));
+        assert!(html.contains("unsupported_record"));
+        assert!(html.contains("&lt;escaped-code&gt;"));
+        for label in [
+            language.text("Tokens alongside quota", "额度与 Token 对照"),
+            language.text(
+                "Not recorded for these response tokens",
+                "这些响应 Token 未记录此信息",
+            ),
+            language.text("Model groups truncated", "模型分组已截断"),
+        ] {
+            assert!(html.contains(label));
+        }
+        assert!(!html.contains(language.text("Weekly quota unavailable", "每周额度不可用")));
+    }
+    let mut s = State::default();
+    s.dispatch(Action::Load(Slot::TokenPeriod, false));
+    // Empty-source reads do not manufacture a request; explicit malformed selection is visible separately.
+    s.remotes.entry(Slot::TokenPeriod).or_default().error = "invalid_token_period".into();
+    let html = render_with(s, token_period_panel);
+    assert!(html.contains("Weekly quota unavailable"));
+    assert!(html.contains("Token period not selected or unavailable"));
+    assert!(html.contains("Choose a valid UTC date pair"));
+}
+
+#[test]
+fn weekly_label_depends_on_duration_not_primary_or_secondary_name() {
+    let q = fixture("overview")["quota"].clone();
+    let html = render_with(full(), |_, _| quota_panel(&q, true, Language::English));
+    assert!(html.contains("Reported weekly window"));
+    let mut q = q;
+    let bucket = &mut q["data"]["buckets"][0];
+    bucket["primary"]["value"]["windowDurationMins"]["value"] = json!("10080");
+    bucket["secondary"]["value"]["windowDurationMins"]["value"] = json!("300");
+    let html = render_with(full(), |_, _| quota_panel(&q, true, Language::Chinese));
+    assert_eq!(html.matches("报告的每周窗口").count(), 1);
+}
+
+#[test]
+fn invalid_activity_retry_uses_validation_surface() {
+    let mut s = full();
+    s.page = Page::Activity;
+    s.remotes.get_mut(&Slot::Activity).unwrap().error = "invalid_date_range".into();
+    let html = render(s);
+    assert!(html.contains("invalid_date_range"));
+    assert!(html.contains("Retry"));
+}
+
+#[test]
+fn aggregate_model_truncation_does_not_hide_the_separate_unknown_count() {
+    use usage_lens_ui::reading::activity_groups;
+    let events =
+        json!({"byModel":[{"name":"known","count":"2"}],"unknownModelCount":"9007199254740993"});
+    let groups = activity_groups(&events, "byModel");
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[1], json!({"name":null,"count":"9007199254740993"}));
+    for count in ["0", "", "bad"] {
+        let mut events = events.clone();
+        events["unknownModelCount"] = json!(count);
+        assert_eq!(activity_groups(&events, "byModel").len(), 1);
+    }
+    let events = json!({"byModel":[{"name":null,"count":"1"}],"unknownModelCount":"1"});
+    assert_eq!(activity_groups(&events, "byModel").len(), 1);
+    assert!(activity_groups(&events, "byType").is_empty());
+    assert!(activity_groups(&Value::Null, "byModel").is_empty());
+}

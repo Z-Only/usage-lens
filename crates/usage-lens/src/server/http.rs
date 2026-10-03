@@ -151,7 +151,7 @@ fn query(raw: Option<&str>, allowed: &[&str], required: &[&str]) -> Result<Value
     for (key, value) in form_urlencoded::parse(raw.unwrap_or("").as_bytes()) {
         if !allowed.contains(&key.as_ref())
             || result.contains_key(key.as_ref())
-            || value.chars().count() > 512
+            || value.chars().count() > if key == "cursor" { 1600 } else { 512 }
         {
             return Err(bad("invalid_query"));
         }
@@ -284,7 +284,16 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
             (
                 "/api/events/search",
                 (
-                    &["sourceId", "query", "limit"][..],
+                    &[
+                        "sourceId",
+                        "query",
+                        "fromDate",
+                        "toDate",
+                        "eventType",
+                        "model",
+                        "cursor",
+                        "limit",
+                    ][..],
                     &["sourceId", "query"][..],
                 ),
             ),
@@ -338,6 +347,13 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
                 ),
             ),
             (
+                "/api/response-tokens/period",
+                (
+                    &["sourceId", "fromDate", "toDate"][..],
+                    &["sourceId", "fromDate", "toDate"][..],
+                ),
+            ),
+            (
                 "/api/response-tokens/records",
                 (
                     &["sourceId", "fromDate", "toDate", "model", "cursor", "limit"][..],
@@ -365,6 +381,7 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
             "/api/skill-summary" => store.get_skill_summary(&input),
             "/api/tools" => store.get_tool_usage(&input),
             "/api/response-tokens" => store.get_response_token_usage(&input),
+            "/api/response-tokens/period" => store.get_response_token_period(&input),
             _ => store.get_response_token_records(&input),
         }?;
         return Ok(json_response(result));
