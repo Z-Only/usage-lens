@@ -52,6 +52,20 @@ class StaticTests(unittest.TestCase):
             (root / 'package.json').write_text('{"name":"wrong","version":"0.4.0"}')
             self.assertTrue(guard.check_versions(root))
 
+    def test_owned_lockfile_package_shapes_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.version_fixture(root)
+            lock = root / 'Cargo.lock'
+            for shape in ['"bad"', 'true', '42', '{}', '[]', '["bad"]', '[42]',
+                          '[true]', '[[]]', '[{name="usage-lens", version="0.4.0"}, "bad"]']:
+                with self.subTest(shape=shape):
+                    lock.write_text(f'package = {shape}\n')
+                    failures = guard.check_versions(root)
+                    self.assertTrue(failures)
+                    self.assertTrue(all(message.startswith('Owned product version inventory cannot be validated:')
+                                        for message in failures))
+
     def test_allow_collection_storage_and_same_origin_fetch(self):
         source = "const body = input.prompt; store.save(body); fetch('/api/overview');"
         self.assertEqual(guard.inspect_source(source), [])

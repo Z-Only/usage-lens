@@ -41,6 +41,8 @@ def check_versions(root: Path) -> list[str]:
                 raise ValueError('Unexpected owned JSON package name')
             versions[path] = package['version']
         lock = tomllib.loads((root / 'Cargo.lock').read_text(encoding='utf-8'))['package']
+        if not isinstance(lock, list) or not all(isinstance(package, dict) for package in lock):
+            raise ValueError('Expected Cargo.lock package entries to be an array of tables')
         for name in OWNED_CARGO_PACKAGES:
             matches = [package for package in lock if package.get('name') == name]
             if len(matches) != 1 or 'source' in matches[0]:
