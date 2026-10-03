@@ -4,6 +4,13 @@ Usage Lens can project an explicitly selected Codex JSONL rollout file into its 
 
 The implementation and all tests were developed with synthetic strings. No real user histories are needed by the test suite. Importing does not launch Codex, start an app-server, authenticate, call a model, execute imported instructions, or open any path mentioned inside a record. There is no automatic history scan, directory import, watch process, or import on startup.
 
+For the separate `rust-v0.160.0` RolloutTrace directory contract, use
+[trace import](trace-import.md). It reads one chosen bounded bundle with validated
+payload references, not an ordinary rollout file. Its schema-4 upgrade is separate
+from the schema-3 incremental workflow below; v0.5.0 and older cannot read schema 4.
+The "no directory import" and embedded-path statements here describe only these
+ordinary rollout commands, not an authorization to discover trace bundles.
+
 ## Supported source declaration
 
 The importer requires the caller to explicitly declare this source baseline:

@@ -70,7 +70,7 @@ paths and values for the actual host shell. Installing the instruction-only Skil
 does not grant local execution permissions. The local database must already have
 been created and populated through separately authorized workflows. The dashboard,
 hooks, imports, and collectors remain independent of conversational setup.
-Persisted queries in v0.4.0 accept schema-2 and schema-3 rollback-journal stores,
+Persisted queries in v0.6.0 accept schema-2, schema-3 and schema-4 rollback-journal stores,
 including normal older schema-2 stores, without migration. They fail rather than
 create or migrate a database. The separate `import-rollout-incremental` write is
 outside the Skill and MCP allowlists. Its first successful import upgrades to
@@ -79,6 +79,12 @@ before that explicit workflow. It requires file/source/stream/version inputs eac
 time and never watches, schedules, discovers files or reopens a remembered path. See the
 [query compatibility notes](../../docs/AI_INSTALL.md#supply-the-three-explicit-query-inputs)
 for safe handling of `storage_error` and `unsupported_schema`.
+
+A successful separate `import-trace-bundle` write upgrades schema 2/3 to schema 4;
+v0.5.0 and older cannot read schema 4. Back up the closed store first. That importer
+and local `trace-attempts`, `trace-detail`, and `trace-summary` queries remain outside
+the unchanged eight-command/tool allowlists. No trace capture or desktop setup is
+enabled by installing this package. See [trace import](../../docs/trace-import.md).
 
 CLI queries share their returned aggregates with the assistant provider, just as
 MCP queries do. The skill must not send retained content or the database. Its

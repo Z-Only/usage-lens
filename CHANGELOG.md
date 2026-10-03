@@ -6,6 +6,28 @@ Releases group useful features and fixes. Merging a PR does not automatically cr
 
 Further changes will be grouped here until a meaningful release is ready.
 
+## [0.6.0] - 2026-10-03
+
+Selected-local-trace-bundle release preparation. This entry does not publish a
+release; exact-commit gates and extracted-artifact verification remain required.
+
+### Added
+
+- Explicit bounded `import-trace-bundle` for one chosen directory and the pinned OpenAI Codex `rust-v0.160.0` RolloutTrace contract, reading only its manifest, trace and validated referenced payloads
+- Local trace attempt/detail/summary queries and bilingual Traces reader with submitted UTC dates, a Monday–Sunday UTC-week preset and pagination, separating prepared request metadata from response completion evidence and preserving absent/null/invalid values
+- Source-wide bounded persisted import warnings and bounded metadata groups with explicit truncation; overall totals remain independent of group truncation
+- Opt-in redacted visible-text projection, atomic import/replay handling and schema-4 storage, without retaining complete raw request/response payloads
+- A bundled [trace import guide](docs/trace-import.md) with source links, bounded selection, evidence caveats, privacy and backup/rollback guidance
+
+### Compatibility and safety
+
+- **Back up the closed store before its first successful explicit trace import.** That transaction upgrades schema 2/3 to 4; v0.5.0 and older cannot read schema 4. Read-only queries accept schema 2/3/4 without automatic migration
+- No trace discovery, watcher, startup collection, configuration changes, installation, subprocess or model request. The Skill and MCP allowlists remain eight aggregate commands/tools; local trace queries are outside them
+- Prepared requests are recorded before transmission, with a WebSocket-warmup logical-input exception; completion summaries are not every streaming frame. No send/delivery, actual physical-request count, billing, exact quota or purchased-credit claim is made
+- Request model/effort/service tier remain separate from observed response metadata. Missing values do not infer defaults, Fast/Standard, token multipliers or per-skill costs
+- Content stays opt-in and excludes system/developer instructions, hidden reasoning and recognized secrets. Raw source files are untouched. Retention, content deletion and all-data deletion preserve trace replay protection and cannot be undone by reimport
+- `CODEX_ROLLOUT_TRACE_ROOT` is an upstream runtime contract, not verified desktop activation. A latest Mac app or Local mode does not prove its runtime or environment compatibility. Live desktop validation remains pending separate user authorization; tests use only synthetic data
+
 ## [0.5.0] - 2026-10-03
 
 Message-reading and quota-context release preparation. This entry does not publish

@@ -1,6 +1,6 @@
 # Usage Lens
 
-Read local messages and tool arguments/results from Activity, drill down from event/model counts, and compare an explicit known-occurrence token period beside reported quota windows. See [message reading and quota context](docs/message-reading.md) for search limits, privacy, and why retained records do not prove actual remote-send payloads.
+Read local messages and tool arguments/results from Activity, inspect an explicitly selected RolloutTrace bundle, and compare recorded token evidence beside reported quota windows. See [message reading and quota context](docs/message-reading.md) for search limits, privacy, and why retained records do not prove actual remote-send payloads.
 
 Local usage evidence for AI workflows: a private loopback dashboard, Skill + local CLI queries, optional MCP, and explicit collectors/importers.
 
@@ -155,6 +155,40 @@ The optional hook configuration in [the plugin package](plugin/usage-lens/README
 
 Skill metrics distinguish requested, read/loaded, and explicitly recorded invocation evidence. Pagination and resource reads are not new invocations. Instruction injection is not task success. Imported or forked histories can overlap; coverage and evidence categories must remain visible.
 
+## Selected local trace bundles
+
+v0.6.0 adds a bounded, one-shot importer for the public Codex `rust-v0.160.0`
+RolloutTrace contract. **Stop writers and back up an existing store before its
+first trace import:** success upgrades schema 2/3 to schema 4; v0.5.0 and older
+cannot read schema 4. Queries never migrate an older store.
+
+```sh
+usage-lens import-trace-bundle --db "$HOME/.usage-lens/usage.sqlite" \
+  --source local-records --directory /absolute/path/to/selected-trace-bundle \
+  --source-version a956835d020762cb2b570053af06f643a11c0ecc
+```
+
+Only the chosen bundle's manifest, trace events and validated referenced payloads
+are read. No discovery, watcher, client configuration, installation, process
+startup or model request occurs. `trace-attempts`, `trace-detail` and
+`trace-summary` are separate local queries, outside the Skill/MCP allowlists.
+The bilingual Traces page uses the same local evidence, with paired UTC date
+filters and a Monday–Sunday UTC-week preset. That calendar week is not a quota
+cycle. Optional visible text is a redacted projection; raw files remain untouched.
+
+A trace request is prepared-request evidence, recorded before transmission; a
+WebSocket warmup can produce logical full input rather than exact wire bytes.
+Responses are completion summaries, not every stream frame. Request model,
+effort and service tier are distinct from observed response values, and missing
+fields never imply Fast/Standard or a default effort. Counts and token dates do
+not prove delivery, quota charges or purchased-credit consumption.
+
+`CODEX_ROLLOUT_TRACE_ROOT` is an upstream runtime contract only. A latest macOS
+app or Local-mode selection does not prove bundled-runtime compatibility or
+environment inheritance. Live desktop validation remains pending separate user
+authorization. See [trace import](docs/trace-import.md) for exact bounds, source
+links, privacy, replay, backup and compatibility details.
+
 ## Conversational integration: Skill + local CLI
 
 The default is **Skill + local CLI**. Install the self-contained `usage-summary`
@@ -191,8 +225,8 @@ No model, success, unique-execution, or per-skill token attribution is inferred.
 
 The local `skills` evidence command is outside this conversational allowlist.
 The instruction-level allowlist is not an OS sandbox. Persisted queries open an
-existing schema-2 or schema-3 rollback-journal store read-only; normal older
-schema-2 databases remain query-compatible without migration in v0.4.0. Queries
+existing schema-2, schema-3 or schema-4 rollback-journal store read-only; normal
+older schema-2/3 databases remain query-compatible without migration in v0.6.0. Queries
 fail rather than create or migrate a store. Incremental import is a separate
 explicit write workflow, outside the Skill's eight-command allowlist and optional
 MCP tools. It does not install a background process or make collection automatic.

@@ -19,7 +19,7 @@ its result, confirmed by the user or their existing configuration. If the intend
 source is ambiguous, ask. Never merge sources, substitute another store, or present
 a demo source as the user's account. A missing/unreadable store or failed query is
 an error; do not create a source, initialize a store, or refresh collection to fix it.
-Persisted queries in v0.4.0 accept an existing schema-2 or schema-3 rollback-journal
+Persisted queries in v0.6.0 accept an existing schema-2, schema-3 or schema-4 rollback-journal
 database; older schema-2 stores remain compatible without migration. `unsupported_schema` means the schema is not
 supported; `storage_error` can mean a missing/unreadable/invalid store or unsupported
 WAL mode. Report the error without guessing its cause. Never run migrations,
@@ -100,7 +100,8 @@ label every result synthetic. Never use demo as a fallback for a real query.
 
 ## Query boundary
 
-Never run `skills`, `history`, `events`, `detail`, `import`, `import-rollout`, `import-rollout-incremental`, `hook`, `settings`,
+Never run `skills`, `history`, `events`, `detail`, `import`, `import-rollout`, `import-rollout-incremental`,
+`import-trace-bundle`, `trace-attempts`, `trace-detail`, `trace-summary`, `hook`, `settings`,
 `delete`, `retention`, `source`, `collect`, `serve`, `doctor`, or `mcp` through this CLI query
 skill. Do not enable capture, install integrations, create authentication, or launch
 collection to answer a query. These are separate workflows requiring their own
@@ -113,6 +114,12 @@ watches, schedules, discovers files or reopens a remembered path. Its first
 successful import upgrades the store to schema 3; v0.3.0 and older cannot read it.
 That workflow requires a verified closed-store backup first. Never trigger it to
 answer a query, populate missing evidence or repair an unsupported schema.
+
+Trace import is another separate write. Its first successful explicit import
+upgrades schema 2/3 to schema 4; v0.5.0 and older cannot read it, so verify a
+closed-store backup first. Local trace queries remain outside this skill's eight
+commands even when they return a summary. Do not activate upstream tracing or
+change desktop configuration to answer a query.
 
 Never transmit raw bodies, prompts, tool arguments/results, titles, file contents,
 or the database to a model through this skill. Query results themselves are shared

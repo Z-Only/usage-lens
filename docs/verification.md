@@ -276,3 +276,61 @@ inspection of the new screenshots, native Linux/macOS/Windows jobs, and extracte
 release-artifact smoke. A version/changelog entry is preparation, not publication.
 No real account, transcript, client hook, user computer or transport interception
 was used in this checkpoint; test data was synthetic.
+
+
+## v0.6.0 selected trace-bundle verification scope (2026-10-03)
+
+This release targets only the source-pinned public RolloutTrace contract described
+in [trace import](trace-import.md). The test plan uses synthetic manifests, trace
+events and referenced payloads, never real Mac files, protected transcripts,
+authentication files, accounts or installed client processes. Upstream source
+review is not live desktop validation. `CODEX_ROLLOUT_TRACE_ROOT` support in the
+public source does not prove the latest desktop app's bundled runtime or launcher
+environment; separately user-authorized live compatibility remains pending.
+
+Required checks cover bounded file/reference/depth handling; safe missing,
+malformed, duplicate and conflicting evidence; prepared-before-transmission and
+completion-summary labels; metadata missing/null/invalid distinctions; conservative
+visible-text projection and redaction; schema-2/3 read-only compatibility; atomic
+schema-4 migration on successful explicit import only; read-only schema-4 queries;
+no-op replay, immutable conflict rollback, deletion and retention protection.
+Trace counts are not physical network-request counts, and recorded token totals
+are not account-wide quota, purchased credits or billing verification.
+
+Release archive tests must include the new guide and resolve its bundled references
+on every platform, reject missing allowlisted docs, and exclude synthetic payloads
+or private trace files from archives. The extracted executable smoke must exercise
+synthetic trace import, local queries, replay/conflict behavior, capture/privacy,
+and unchanged eight-tool aggregate-only MCP discovery in an isolated temporary
+home. The smoke does not execute a model or start Codex.
+
+The checks listed here are requirements, not a claim that the current uncommitted
+head has passed them. Record focused results separately and require the complete
+exact-commit production gate, browser/cross-platform CI and all extracted release
+artifacts before publication. Historical v0.5.0 or earlier results above apply only
+to their recorded checkpoints and must not be carried forward as v0.6.0 evidence.
+
+
+Focused local documentation/package checks on the v0.6.0 working tree passed at
+2026-10-03 14:19 UTC: 70 Python gate/static/build/plugin tests, 42 synthetic
+release-tool tests, the owned-version static guard and JavaScript smoke syntax.
+A fresh `cargo build --locked -p usage-lens` succeeded and the full updated smoke
+passed against its **debug executable**, including schema-2/3 trace reads,
+schema-4 import/read-only checks, prepared/observed metadata states, trace token
+separation, pagination, replay/conflict rollback, capture-off/no-backfill,
+redaction/excluded-content database canaries, content/all-data deletion with no
+resurrection, raw-file preservation and unchanged eight-tool MCP discovery. This is focused
+local evidence only: it is not an extracted release-artifact result, a full
+production coverage gate, cross-platform execution or real desktop compatibility.
+Later source changes require the applicable checks to run again.
+
+
+The subsequent independent-review changes require fresh production verification:
+strict response usage-parent and failed/cancelled partial-response validation,
+backward-clock warning preservation, assistant phase/typed-content exclusions,
+Windows local-root confinement, persisted source-wide bounded import warnings,
+and explicit metadata-group truncation. Documentation describes those final
+contracts; the earlier debug-smoke checkpoint alone does not verify later edits.
+The Traces UI browser scenarios were authored and typechecked, but local browser
+execution remains blocked by the recorded socket restriction. No new browser pass
+or cross-platform runtime pass is claimed from documentation checks.

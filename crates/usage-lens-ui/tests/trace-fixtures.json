@@ -1,0 +1,630 @@
+{
+  "attempt": {
+    "sourceId": "demo",
+    "bundleId": "synthetic-bundle",
+    "attemptId": "trace-completed",
+    "threadId": "synthetic-thread",
+    "turnId": "synthetic-turn",
+    "inferenceId": "1",
+    "startedAt": "2026-10-01T12:00:00.000Z",
+    "completedAt": "2026-10-01T12:00:02.000Z",
+    "status": "completed",
+    "request": {
+      "model": {
+        "state": "reported",
+        "value": "requested-model"
+      },
+      "reasoningEffort": {
+        "state": "reported",
+        "value": "high"
+      },
+      "serviceTier": {
+        "state": "reported",
+        "value": "priority"
+      }
+    },
+    "observed": {
+      "model": {
+        "state": "reported",
+        "value": "observed-model"
+      },
+      "serviceTier": {
+        "state": "not_reported",
+        "value": null
+      }
+    },
+    "responseId": "direct-response",
+    "upstreamRequestId": "upstream-id",
+    "tokens": {
+      "inputTokens": {
+        "state": "reported",
+        "value": "9007199254740993123"
+      },
+      "cachedInputTokens": {
+        "state": "reported",
+        "value": "30"
+      },
+      "cacheWriteInputTokens": {
+        "state": "omitted",
+        "value": null
+      },
+      "outputTokens": {
+        "state": "reported",
+        "value": "200"
+      },
+      "reasoningOutputTokens": {
+        "state": "reported",
+        "value": "80"
+      },
+      "totalTokens": {
+        "state": "reported",
+        "value": "9007199254740993323"
+      }
+    },
+    "evidence": "prepared_request",
+    "contentRetained": true
+  },
+  "list": {
+    "source": {
+      "id": "demo"
+    },
+    "fromDate": null,
+    "toDate": null,
+    "coverage": {
+      "capture": "available",
+      "completeness": "partial",
+      "missingAttempts": "unknown",
+      "requestEvidence": "prepared_not_confirmed_sent",
+      "tokenAttribution": "direct_response_only",
+      "accountTotalRelationship": "not_combined"
+    },
+    "warnings": [
+      "synthetic_trace_warning"
+    ],
+    "attempts": [
+      {
+        "sourceId": "demo",
+        "bundleId": "synthetic-bundle",
+        "attemptId": "trace-completed",
+        "threadId": "synthetic-thread",
+        "turnId": "synthetic-turn",
+        "inferenceId": "1",
+        "startedAt": "2026-10-01T12:00:00.000Z",
+        "completedAt": "2026-10-01T12:00:02.000Z",
+        "status": "completed",
+        "request": {
+          "model": {
+            "state": "reported",
+            "value": "requested-model"
+          },
+          "reasoningEffort": {
+            "state": "reported",
+            "value": "high"
+          },
+          "serviceTier": {
+            "state": "reported",
+            "value": "priority"
+          }
+        },
+        "observed": {
+          "model": {
+            "state": "reported",
+            "value": "observed-model"
+          },
+          "serviceTier": {
+            "state": "not_reported",
+            "value": null
+          }
+        },
+        "responseId": "direct-response",
+        "upstreamRequestId": "upstream-id",
+        "tokens": {
+          "inputTokens": {
+            "state": "reported",
+            "value": "9007199254740993123"
+          },
+          "cachedInputTokens": {
+            "state": "reported",
+            "value": "30"
+          },
+          "cacheWriteInputTokens": {
+            "state": "omitted",
+            "value": null
+          },
+          "outputTokens": {
+            "state": "reported",
+            "value": "200"
+          },
+          "reasoningOutputTokens": {
+            "state": "reported",
+            "value": "80"
+          },
+          "totalTokens": {
+            "state": "reported",
+            "value": "9007199254740993323"
+          }
+        },
+        "evidence": "prepared_request",
+        "contentRetained": true
+      }
+    ],
+    "nextCursor": "trace-next"
+  },
+  "summary": {
+    "fromDate": null,
+    "toDate": null,
+    "coverage": {
+      "capture": "available",
+      "completeness": "partial",
+      "missingAttempts": "unknown",
+      "requestEvidence": "prepared_not_confirmed_sent",
+      "tokenAttribution": "direct_response_only",
+      "accountTotalRelationship": "not_combined"
+    },
+    "warnings": [
+      "synthetic_trace_warning"
+    ],
+    "attemptCount": "1",
+    "tokenAttemptCount": "1",
+    "totals": {
+      "inputTokens": "9007199254740993123",
+      "cachedInputTokens": "30",
+      "cacheWriteInputTokens": null,
+      "outputTokens": "200",
+      "reasoningOutputTokens": "80",
+      "totalTokens": "9007199254740993323"
+    },
+    "tokenCoverage": {
+      "inputTokens": {
+        "reportedCount": "1",
+        "omittedCount": "0",
+        "notReportedCount": "0",
+        "invalidCount": "0"
+      },
+      "cachedInputTokens": {
+        "reportedCount": "1",
+        "omittedCount": "0",
+        "notReportedCount": "0",
+        "invalidCount": "0"
+      },
+      "cacheWriteInputTokens": {
+        "reportedCount": "0",
+        "omittedCount": "1",
+        "notReportedCount": "0",
+        "invalidCount": "0"
+      },
+      "outputTokens": {
+        "reportedCount": "1",
+        "omittedCount": "0",
+        "notReportedCount": "0",
+        "invalidCount": "0"
+      },
+      "reasoningOutputTokens": {
+        "reportedCount": "1",
+        "omittedCount": "0",
+        "notReportedCount": "0",
+        "invalidCount": "0"
+      },
+      "totalTokens": {
+        "reportedCount": "1",
+        "omittedCount": "0",
+        "notReportedCount": "0",
+        "invalidCount": "0"
+      }
+    },
+    "byStatus": [
+      {
+        "status": "completed",
+        "count": "1",
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        }
+      }
+    ],
+    "byRequestedModel": [
+      {
+        "state": "reported",
+        "value": "requested-model",
+        "count": "1",
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        }
+      }
+    ],
+    "byRequestedReasoningEffort": [
+      {
+        "state": "reported",
+        "value": "high",
+        "count": "1",
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        }
+      }
+    ],
+    "byRequestedServiceTier": [
+      {
+        "state": "reported",
+        "value": "priority",
+        "count": "1",
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        }
+      }
+    ],
+    "byObservedModel": [
+      {
+        "state": "reported",
+        "value": "observed-model",
+        "count": "1",
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        }
+      }
+    ],
+    "byObservedServiceTier": [
+      {
+        "state": "not_reported",
+        "value": null,
+        "count": "1",
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        }
+      }
+    ]
+  },
+  "detail": {
+    "attempt": {
+      "sourceId": "demo",
+      "bundleId": "synthetic-bundle",
+      "attemptId": "trace-completed",
+      "threadId": "synthetic-thread",
+      "turnId": "synthetic-turn",
+      "inferenceId": "1",
+      "startedAt": "2026-10-01T12:00:00.000Z",
+      "completedAt": "2026-10-01T12:00:02.000Z",
+      "status": "completed",
+      "request": {
+        "model": {
+          "state": "reported",
+          "value": "requested-model"
+        },
+        "reasoningEffort": {
+          "state": "reported",
+          "value": "high"
+        },
+        "serviceTier": {
+          "state": "reported",
+          "value": "priority"
+        }
+      },
+      "observed": {
+        "model": {
+          "state": "reported",
+          "value": "observed-model"
+        },
+        "serviceTier": {
+          "state": "not_reported",
+          "value": null
+        }
+      },
+      "responseId": "direct-response",
+      "upstreamRequestId": "upstream-id",
+      "tokens": {
+        "inputTokens": {
+          "state": "reported",
+          "value": "9007199254740993123"
+        },
+        "cachedInputTokens": {
+          "state": "reported",
+          "value": "30"
+        },
+        "cacheWriteInputTokens": {
+          "state": "omitted",
+          "value": null
+        },
+        "outputTokens": {
+          "state": "reported",
+          "value": "200"
+        },
+        "reasoningOutputTokens": {
+          "state": "reported",
+          "value": "80"
+        },
+        "totalTokens": {
+          "state": "reported",
+          "value": "9007199254740993323"
+        }
+      },
+      "evidence": "prepared_request",
+      "contentRetained": true
+    },
+    "content": {
+      "requestProjection": {
+        "projection": "visible_text_only",
+        "messages": [
+          {
+            "role": "user",
+            "text": "<img src=x onerror=alert(1)> synthetic visible prompt [REDACTED]"
+          }
+        ]
+      },
+      "responseProjection": {
+        "projection": "visible_text_only",
+        "messages": [
+          {
+            "role": "assistant",
+            "text": "Synthetic visible response"
+          }
+        ]
+      }
+    },
+    "contentRetained": true,
+    "warnings": [
+      "synthetic_projection_warning"
+    ]
+  }
+}

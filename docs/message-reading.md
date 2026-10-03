@@ -109,3 +109,16 @@ The new HTTP period endpoint is local UI-only; it does not add a conversational 
 There is no schema migration in v0.5.0. Existing schema 2 and 3 stores retain their
 v0.4.0 compatibility, replay, and rollback rules. A v0.4.0 binary can still read
 those stores, but lacks these new UI surfaces and local HTTP query options.
+
+
+## Separate trace evidence in v0.6
+
+The [selected trace-bundle importer](trace-import.md) is a different explicit
+source contract and write workflow. Its local attempt/detail/summary views keep
+prepared request model/effort/tier separate from completion evidence. The older
+response-token period fields above remain `not_recorded`; importing trace metadata
+does not fabricate joins into that response population. Trace requests are not
+universal exact-wire evidence or delivery/billing proof. The new schema-4 upgrade
+happens only on successful explicit trace import and requires a backup; v0.5.0 and
+older cannot read that upgraded store. v0.6.0 queries still read schema 2/3 without
+migration. The eight conversational CLI/MCP aggregate allowlists remain unchanged.

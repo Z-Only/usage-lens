@@ -1,6 +1,6 @@
 {
   "name": "usage-lens",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Skill + local CLI for read-only usage aggregates; optional MCP",
   "author": {
     "name": "Local developer"

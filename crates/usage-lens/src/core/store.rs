@@ -1,3 +1,6 @@
+#[path = "trace.rs"]
+pub mod trace;
+
 #[path = "incremental.rs"]
 mod incremental;
 
@@ -131,7 +134,7 @@ impl UsageStore {
     pub fn open(path: impl AsRef<Path>) -> CoreResult<Self> {
         Self::open_internal(path.as_ref(), None)
     }
-    /// Opens an existing schema-2 or schema-3 store without initialization or migration.
+    /// Opens an existing schema-2, schema-3 or schema-4 store without initialization or migration.
     /// Usage Lens uses rollback journaling. Reject externally WAL-converted files
     /// before SQLite can create sidecars; external concurrent journal-mode changes
     /// are unsupported. Keep normal locking so concurrent Usage Lens writes remain safe.
@@ -167,7 +170,7 @@ impl UsageStore {
             "PRAGMA query_only=ON; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=2000;",
         ))?;
         let version: i64 = safe(db.query_row("PRAGMA user_version", [], |row| row.get(0)))?;
-        if ![2, 3].contains(&version) {
+        if ![2, 3, 4].contains(&version) {
             return Err(error("unsupported_schema"));
         }
         Ok(Self {
@@ -201,7 +204,7 @@ impl UsageStore {
         let _ = existed;
         safe(db.execute_batch("PRAGMA secure_delete=ON; PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; PRAGMA busy_timeout=2000;"))?;
         let version: i64 = safe(db.query_row("PRAGMA user_version", [], |row| row.get(0)))?;
-        if ![0, 1, 2, 3].contains(&version) {
+        if ![0, 1, 2, 3, 4].contains(&version) {
             return Err(error("unsupported_schema"));
         }
         let result = Self {
@@ -670,6 +673,15 @@ impl UsageStore {
                     ))?;
                 }
             }
+            if self.has_trace_schema()? {
+                result["traceAttemptsDeleted"] = json!(
+                    safe(self.db()?.execute(
+                        "DELETE FROM trace_attempts WHERE (? IS NULL OR source_id=?)",
+                        params![id, id]
+                    ))?
+                    .to_string()
+                );
+            }
             Ok(result)
         })
     }
@@ -684,7 +696,15 @@ impl UsageStore {
                 "DELETE FROM event_details WHERE (? IS NULL OR source_id=?)",
                 params![id, id],
             ))?;
-            Ok(json!({"contentsDeleted":n.to_string()}))
+            let trace_n = if self.has_trace_schema()? {
+                safe(self.db()?.execute(
+                    "DELETE FROM trace_details WHERE (? IS NULL OR source_id=?)",
+                    params![id, id],
+                ))?
+            } else {
+                0
+            };
+            Ok(json!({"contentsDeleted":(n + trace_n).to_string()}))
         })
     }
     pub fn delete_source(&self, id: &str) -> CoreResult<Value> {
@@ -721,6 +741,15 @@ impl UsageStore {
                         .execute(&format!("DELETE FROM {table} WHERE {col}<?"), [&cutoff]),
                 )?;
                 result[key] = json!(n.to_string());
+            }
+            if self.has_trace_schema()? {
+                result["traceAttemptsDeleted"] = json!(
+                    safe(
+                        self.db()?
+                            .execute("DELETE FROM trace_attempts WHERE imported_at<?", [&cutoff])
+                    )?
+                    .to_string()
+                );
             }
             Ok(result)
         })
@@ -953,7 +982,7 @@ impl UsageStore {
         require(v["sourceId"] == source && v["kind"] == kind)?;
         let at = timestamp(&v["at"])?;
         let key = identifier(&v["key"])?;
-        if kind != "events" {
+        if kind != "events" && kind != "traces" {
             require(
                 key.bytes().all(|b| b.is_ascii_digit())
                     && key

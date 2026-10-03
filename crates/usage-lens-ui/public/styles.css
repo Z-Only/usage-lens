@@ -1579,3 +1579,26 @@ button.breakdown-link:hover { color: var(--accent); }
 .token-period > .muted { font-size: 13px; line-height: 1.7; }
 .token-period .notice { display: block; font-size: 12px; line-height: 1.7; }
 .token-period .attribution-unknown { margin: 22px 0; }
+/* Explicit local trace evidence, with scroll-contained aggregate columns. */
+.trace-reader, .trace-summary { margin-bottom: 24px; min-width: 0; }
+.trace-reader > .muted, .trace-summary > .notice { font-size: 13px; line-height: 1.7; }
+.trace-reader .notice, .trace-summary .notice { display: block; overflow-wrap: anywhere; }
+.trace-attempts { list-style: none; padding: 0; margin: 20px 0; }
+.trace-attempt { display: grid; gap: 8px; width: 100%; border: 0; border-bottom: 1px solid var(--border); padding: 18px 0; background: transparent; text-align: left; color: var(--text); font: inherit; font-size: 12px; overflow-wrap: anywhere; }
+.trace-attempt:hover { color: var(--accent); }
+.trace-attempt-head { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.trace-attempt-id { color: var(--muted); font-size: 10px; }
+.trace-statuses { display: flex; gap: 12px 24px; flex-wrap: wrap; font-size: 12px; margin: 20px 0; }
+.trace-groups { margin: 22px 0; font-size: 12px; }
+.trace-groups summary { margin-bottom: 12px; }
+.trace-groups table { min-width: 660px; width: 100%; text-align: left; }
+.trace-groups th, .trace-groups td { padding: 12px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.trace-groups th { font-weight: 500; }
+.trace-groups small { display: block; color: var(--muted); margin-top: 5px; }
+.response-totals dd.trace-token-coverage { font-size: 10px; color: var(--muted); }
+.trace-drawer { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .trace-reader .filters label { min-width: 0; flex: 1 1 100%; }
+  .trace-reader .filters input { width: 100%; min-width: 0; }
+  .trace-reader .filters button { width: 100%; }
+}

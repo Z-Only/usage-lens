@@ -13,6 +13,42 @@ Usage Lens follows [Semantic Versioning](https://semver.org/). The initial publi
 
 The publishing pipeline currently accepts stable `vMAJOR.MINOR.PATCH` tags only, with no leading zeros. Prerelease/build-metadata tags require a reviewed workflow change first. All source, workflow, version, and changelog changes go through a PR and the required tests.
 
+## v0.6.0 selected trace-bundle compatibility
+
+This minor release adds a bounded explicit `import-trace-bundle` write for one
+chosen stable RolloutTrace directory at the pinned public Codex `rust-v0.160.0`
+contract. It reads only the manifest, trace and validated referenced payloads.
+There is no discovery, watcher, automatic trace activation, client configuration,
+installation, subprocess or model request. Local attempt/detail/summary queries
+remain outside the eight-command/tool conversational allowlists.
+
+**Back up a closed store before its first successful explicit trace import.**
+That atomic transaction upgrades schema 2/3 to schema 4; v0.5.0 and older cannot
+read schema 4. Failed parsing/validation does not migrate. v0.6.0 read-only queries
+support rollback-journal schemas 2/3/4 without migration. Ordinary startup does
+not upgrade a store. For rollback, retain an old executable and a verified
+compatible pre-upgrade backup, restored only to a separate path.
+
+Bundle and attempt evidence is immutable; changed reimports conflict rather than
+append to accepted history. Identical imports are no-ops. Content deletion,
+retention and all-data deletion preserve trace replay protection; none can be
+undone by reimporting the same bundle. Optional retained content is a conservative
+redacted visible-text projection, excluding system/developer instructions, hidden
+reasoning and recognized credentials. Raw source files are untouched.
+
+Prepared requests precede transmission; a WebSocket warmup can record logical full
+input rather than wire bytes. Completion payloads summarize output and optional
+usage, not all frames. Request model/effort/tier do not establish observed response
+settings, Fast/Standard, delivery, billing or exact weekly quota/credit costs.
+See [trace import](trace-import.md) for source evidence and complete limitations.
+
+The upstream `CODEX_ROLLOUT_TRACE_ROOT` contract does not establish macOS desktop
+runtime compatibility or environment inheritance, even with a latest app or Local
+mode. Live validation remains pending separate user authorization. Only synthetic
+fixtures may enter tests, CI and release archives. A version/changelog entry is
+preparation, not proof of publication or validation: require exact-head production
+gates, browser/cross-platform CI and extracted-artifact smoke on every target.
+
 ## v0.4.0 incremental-record-import compatibility
 
 This minor release adds a separately authorized one-shot incremental file import.
@@ -108,11 +144,11 @@ for tested and pending checks, without carrying older results forward to a new h
 
 These labels/architectures are listed in [GitHub's official runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), checked October 2, 2026. Architecture is verified again in each package job; nothing is labeled as a cross-architecture build. A failed platform blocks the entire release; do not silently drop it.
 
-Each `.tar.gz` contains the native executable, embedded WebAssembly UI, bundled SQLite, license, selected docs, inert plugin examples, full third-party license/notice bundles, and `manifest.json`. See [third-party evidence and reviewed declaration supplements](third-party.md). The package allowlist is in `scripts/release/package.py`; the checkout, source fixtures, node_modules, logs, databases, environment files, and user records are never packaged. The manifest identifies version, full source commit, platform, Rust target, tested runner, OS baseline, runtime requirements, and every packaged file's SHA-256. No Node/Bun/Rust runtime is needed by users. Build/test tools are not shipped.
+Each `.tar.gz` contains the native executable, embedded WebAssembly UI, bundled SQLite, license, selected docs, inert plugin examples, full third-party license/notice bundles, and `manifest.json`. See [third-party evidence and reviewed declaration supplements](third-party.md). The package allowlist is in `scripts/release/common.py`, enforced by `scripts/release/package.py`; the checkout, source fixtures, node_modules, logs, databases, environment files, and user records are never packaged. The manifest identifies version, full source commit, platform, Rust target, tested runner, OS baseline, runtime requirements, and every packaged file's SHA-256. No Node/Bun/Rust runtime is needed by users. Build/test tools are not shipped.
 
 The Linux executable uses static musl and is smoke-tested on Ubuntu 24.04; it does not require an installed glibc version. The build checks that it has no dynamic ELF interpreter. Older kernels, CentOS 7, and Alpine are not claimed supported without tests. macOS builds set `MACOSX_DEPLOYMENT_TARGET=11.0` for both architectures and verify the produced Mach-O minimum using `otool`. Rust officially supports ARM64 from 11.0 and x64 from an earlier baseline ([Rust target requirements](https://doc.rust-lang.org/rustc/platform-support/apple-darwin.html)). This broadens the compiler/linker target without claiming runtime verification on macOS 11–14: CI runs on macOS 15 only. Windows builds use the static MSVC runtime and are tested on Server 2025; other Windows variants remain unverified. No ARM Linux, ARM Windows, 32-bit, older-OS compatibility, OS notarization, or code-signing claim is made. SHA-256 verifies integrity, not a publisher signature.
 
-Every platform extracts its own archive to a new temporary directory outside the checkout and runs the native CLI including setup/health checks, SQLite create/reopen, read-only schema-2/3 checks, synthetic incremental append/no-op/truncation, synthetic demo HTTP and embedded UI, and MCP initialize/list/query smoke. The smoke creates only temporary synthetic data and an isolated home directory. No real account, installed Codex process, credentials, or user records are used.
+Every platform extracts its own archive to a new temporary directory outside the checkout and runs the native CLI including setup/health checks, SQLite create/reopen, read-only schema-2/3/4 checks, synthetic incremental append/no-op/truncation, selected trace import/replay/privacy checks, synthetic demo HTTP and embedded UI, and MCP initialize/list/query smoke. The smoke creates only temporary synthetic data and an isolated home directory. No real account, installed Codex process, credentials, or user records are used.
 
 ## Prepare a release PR
 
