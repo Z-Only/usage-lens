@@ -4,5 +4,5 @@ pub mod redact;
 pub mod response_tokens;
 mod store;
 pub mod validation;
-pub use store::UsageStore;
+pub use store::{UsageStore, trace};
 pub use validation::{CoreError, CoreResult};

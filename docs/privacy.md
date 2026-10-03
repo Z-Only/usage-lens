@@ -32,7 +32,7 @@ command exposes individual evidence records and
 must not be called through this Skill or used as an aggregate fallback. This
 instruction boundary is not an OS sandbox for a client with general shell access.
 Persisted query commands use a read-only SQLite connection and accept a supported
-schema-2 or schema-3 rollback-journal store. They never create a missing database or migrate an
+schema-2, schema-3 or schema-4 rollback-journal store. They never create a missing database or migrate an
 old schema. Errors intentionally omit database paths and contents. A failed query
 must not trigger SQLite/PRAGMA commands or writable setup through the Skill.
 `health` and optional MCP `usage_health` return selected-source aggregate counts,
@@ -55,6 +55,39 @@ Content capture is disabled by default for new installations. Enabling it applie
 Credentials, authentication cookies, and keys are not collection targets. Known secret patterns are redacted from retained content, but pattern matching cannot guarantee that arbitrary sensitive text has been removed. Company code, personal information, and confidential business content may remain. Review applicable company rules before collecting them, even on a local machine.
 
 System/developer instruction records and hidden reasoning are outside the supported content event types. Never interpret an unsupported record as an ordinary assistant message merely to keep it.
+
+## Explicit trace bundles
+
+The separate [trace import](trace-import.md) reads only one user-selected bounded
+bundle and validated payload references inside it. It does not discover traces,
+watch a directory, enable upstream recording, modify configuration, install a
+client, launch another process or make a model request. Raw files may contain
+sensitive prompts, instructions, hidden reasoning, tool data and paths; they remain
+untouched by Usage Lens, including after local retention or deletion.
+
+Only an explicitly enabled redacted visible-text projection may be retained.
+System/developer instructions, hidden reasoning, excluded injected instructions
+and recognized credentials remain excluded; uncertain request user content is
+not assumed human-authored. Unknown assistant phases and nonempty/invalid typed
+assistant content classifications are excluded. Only supported visible text is
+projected; tool arguments/results and attachments are excluded from trace content.
+The entire raw request/response JSON is never retained
+as a fallback. Redaction is best-effort and cannot make a private store safe to
+publish. Enabling capture later or reimporting does not restore missing/deleted
+content. Retention, content-only deletion and explicit all-data deletion preserve
+trace import/replay protection. All-data deletion removes retained trace evidence
+but reimport cannot resurrect it; a new source is a separate explicit namespace.
+
+Local `trace-attempts`, `trace-detail` and `trace-summary` are outside the Skill
+and MCP's unchanged eight aggregate commands/tools. Request settings and response
+completion evidence remain distinct. A prepared request is not transmission,
+delivery or billing proof; raw diagnostic files do not establish complete history.
+
+**Back up the closed store before its first successful explicit trace import.**
+It upgrades schema 2/3 to schema 4 atomically. v0.5.0 and older cannot read schema 4;
+read-only queries in v0.6.0 also support schema 2/3 without automatic migration.
+Latest Mac app/Local mode does not establish runtime or environment compatibility;
+live desktop capture validation remains pending separate user authorization.
 
 ## Local storage and retention
 

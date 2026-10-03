@@ -123,7 +123,7 @@ fn run(
             let next = state
                 .try_update(|s| s.complete(&request, response))
                 .unwrap_or_default();
-            if request.slot != Slot::Detail {
+            if !matches!(request.slot, Slot::Detail | Slot::TraceDetail) {
                 revision.update(|v| *v += 1);
             }
             modal_revision.update(|v| *v += 1);

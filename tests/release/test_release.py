@@ -138,6 +138,52 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Missing or linked allowlisted input: docs/message-reading.md"):
             self.build()
 
+    def test_trace_guide_and_bundled_references_resolve_in_every_platform_archive(self):
+        guide = "docs/trace-import.md"
+        referring_docs = {
+            "README.md", "CHANGELOG.md", "docs/data-contract.md", "docs/verification.md",
+            "docs/AI_INSTALL.md", "docs/releases.md", "docs/privacy.md",
+            "docs/record-import.md", "docs/message-reading.md", "plugin/usage-lens/README.md",
+        }
+        self.assertIn(guide, FILES, "The trace contract must ship with its import command")
+        checkout = SCRIPTS.parents[1]
+        for name in referring_docs | {guide}:
+            (self.root / name).write_bytes((checkout / name).read_bytes())
+        guide_bytes = (checkout / guide).read_bytes()
+        # Neither an input bundle nor even synthetic request/response fixtures are
+        # release inputs. Leave canaries in the checkout to prove the boundary.
+        private_bundle = self.root / "private-trace" / "payloads"
+        private_bundle.mkdir(parents=True)
+        (private_bundle.parent / "manifest.json").write_text("synthetic private manifest")
+        (private_bundle.parent / "trace.jsonl").write_text("synthetic private trace")
+        (private_bundle / "1.json").write_text("synthetic private request")
+        for target in TARGETS:
+            with self.subTest(target=target):
+                archive, manifest = self.build(target)
+                verify_archive(archive, manifest)
+                prefix = asset_base(VERSION, target) + "/"
+                with tarfile.open(archive, "r:gz") as tar:
+                    bundled = {member.name.removeprefix(prefix): tar.extractfile(member).read() for member in tar}
+                self.assertEqual(bundled[guide], guide_bytes)
+                self.assertEqual(manifest["files"][guide], hashlib.sha256(guide_bytes).hexdigest())
+                self.assertFalse(any("private-trace" in name or name.endswith("trace.jsonl") for name in bundled))
+                resolved_from = set()
+                for name in referring_docs:
+                    for destination in re.findall(r"\[[^\]]*\]\(([^)]+)\)", bundled[name].decode("utf-8")):
+                        url = urlsplit(destination)
+                        if url.scheme or url.netloc or not url.path:
+                            continue
+                        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), unquote(url.path)))
+                        if resolved == guide:
+                            self.assertIn(resolved, bundled, f"Broken bundled trace reference in {name}")
+                            resolved_from.add(name)
+                self.assertEqual(resolved_from, referring_docs)
+
+    def test_missing_trace_guide_blocks_packaging(self):
+        (self.root / "docs/trace-import.md").unlink()
+        with self.assertRaisesRegex(ValueError, "Missing or linked allowlisted input: docs/trace-import.md"):
+            self.build()
+
     def test_windows_binary_filename(self):
         archive, manifest = self.build("windows-x64")
         self.assertIn("usage-lens.exe", manifest["files"])

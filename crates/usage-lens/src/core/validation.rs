@@ -29,6 +29,8 @@ pub enum CoreError {
     StorageError,
     RolloutCheckpointConflict,
     RolloutIdentityConflict,
+    TraceIdentityConflict,
+    TraceAttemptNotFound,
 }
 
 impl CoreError {
@@ -47,6 +49,8 @@ impl CoreError {
             b"imported_source_required" => Self::ImportedSourceRequired,
             b"rollout_checkpoint_conflict" => Self::RolloutCheckpointConflict,
             b"rollout_identity_conflict" => Self::RolloutIdentityConflict,
+            b"trace_identity_conflict" => Self::TraceIdentityConflict,
+            b"trace_attempt_not_found" => Self::TraceAttemptNotFound,
             _ => Self::StorageError,
         }
     }
@@ -66,6 +70,8 @@ impl CoreError {
             Self::StorageError => "storage_error",
             Self::RolloutCheckpointConflict => "rollout_checkpoint_conflict",
             Self::RolloutIdentityConflict => "rollout_identity_conflict",
+            Self::TraceIdentityConflict => "trace_identity_conflict",
+            Self::TraceAttemptNotFound => "trace_attempt_not_found",
         }
     }
 }

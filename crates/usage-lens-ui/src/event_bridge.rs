@@ -26,3 +26,14 @@ pub fn prevent<E: JsCast>(ui: Ui, action: Action) -> impl Fn(E) {
 pub fn cancel(ui: Ui) -> impl Fn(web_sys::Event) {
     prevent(ui, Action::Close)
 }
+
+pub fn trace_week(ui: Ui) -> impl Fn(web_sys::MouseEvent) {
+    move |_| {
+        ui.send(Action::TraceWeek(
+            web_sys::js_sys::Date::new_0()
+                .to_iso_string()
+                .as_string()
+                .unwrap_or_default(),
+        ))
+    }
+}

@@ -6,4 +6,5 @@ pub mod event_bridge;
 pub mod model;
 pub mod reading;
 pub mod token_period;
+pub mod trace_reader;
 pub mod views;

@@ -11,7 +11,7 @@ FILES = [
     "LICENSE", "README.md", "CHANGELOG.md",
     "docs/AI_INSTALL.md", "docs/releases.md", "docs/privacy.md",
     "docs/data-contract.md", "docs/record-import.md", "docs/verification.md",
-    "docs/third-party.md", "docs/message-reading.md",
+    "docs/third-party.md", "docs/message-reading.md", "docs/trace-import.md",
     "plugin/usage-lens/.codex-plugin/plugin.json",
     "plugin/usage-lens/README.md",
     "plugin/usage-lens/examples/mcp.config.example.json",

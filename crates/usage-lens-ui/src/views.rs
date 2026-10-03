@@ -27,6 +27,7 @@ pub fn click_action<E>(ui: Ui, action: Action) -> impl Fn(E) {
 pub fn icon_path(name: &str) -> &'static str {
     match name {
         "overview" => "m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9",
+        "traces" => "M4 4h16v16H4zM8 8h8M8 12h8M8 16h4",
         "activity" => "M7 3h10v18H7zM10 7h4M10 11h4M10 15h4",
         "quotas" => "M5 21V13M12 21V7M19 21V3",
         "skills" => "m3 7 9-5 9 5-9 5-9-5m0 5 9 5 9-5m-18 5 9 5 9-5",
@@ -351,13 +352,15 @@ pub fn content(s: &State, ui: Ui) -> AnyView {
             })}
         {if s.page == Page::Settings && !status.is_null() {
             settings(s, ui)
+        } else if s.page == Page::Traces && !s.source.is_empty() {
+            crate::trace_reader::trace_page(s, ui)
         } else if !overview.is_null() {
             match s.page {
                 Page::Overview => overview_view(s, ui),
                 Page::Activity => activity(s, ui),
                 Page::Skills => skills(s, ui),
                 Page::Quotas => quotas(s, ui),
-                Page::Settings => ().into_any(),
+                Page::Settings | Page::Traces => ().into_any(),
             }
         } else if !loading && !has_refresh_error {
             view! {
@@ -1986,6 +1989,8 @@ pub fn settings(s: &State, ui: Ui) -> AnyView {
 pub fn modal(s: &State, ui: Ui) -> AnyView {
     if let Some(action) = s.action {
         confirmation(s, action, ui)
+    } else if s.selected["attemptId"].is_string() {
+        crate::trace_reader::trace_detail(s, ui)
     } else if !s.selected.is_null() {
         event_detail(s, ui)
     } else {
@@ -2030,8 +2035,8 @@ pub fn confirmation(s: &State, action: Destructive, ui: Ui) -> AnyView {
                         " "{s.data(Slot::Status)["settings"]["retentionDays"].to_string()}" "
                         {l
                             .text(
-                                "days. This removes older recorded observations, events, attempts, import-deduplication history and response-token records using collection/import timestamps, not the time an activity occurred.",
-                                "天。依据采集／导入时间删除过期快照、事件、尝试、导入去重历史与响应 Token 记录，而不是依据活动发生时间。",
+                                "days. This removes older recorded observations, events, attempts, rollout import-deduplication history and response-token records using collection/import timestamps, not the time an activity occurred.",
+                                "天。依据采集／导入时间删除过期快照、事件、尝试、rollout 导入去重历史与响应 Token 记录，而不是依据活动发生时间。",
                             )}
                     </p>
                 }
@@ -2045,13 +2050,13 @@ pub fn confirmation(s: &State, action: Destructive, ui: Ui) -> AnyView {
                         </strong><br />
                         {if action == Destructive::Content {
                             l.text(
-                                "Removes retained message bodies, tool arguments/results and file contents. Event metadata remains.",
-                                "删除保留的消息正文、工具参数／结果与文件内容，保留事件元数据。",
+                                "Removes retained message bodies, tool arguments/results, file contents and trace projections. Event and trace metadata remain.",
+                                "删除保留的消息正文、工具参数／结果、文件内容与追踪投影，保留事件与追踪元数据。",
                             )
                         } else {
                             l.text(
-                                "Removes recorded observations, events, attempts, retained content, import-deduplication history and response-token records for this source. Source configuration and settings remain.",
-                                "删除此来源的快照、事件、尝试、保留内容、导入去重历史与响应 Token 记录，保留来源配置与设置。",
+                                "Removes recorded observations, events, attempts, retained content, rollout import-deduplication history and response-token records for this source. Source configuration and settings remain.",
+                                "删除此来源的快照、事件、尝试、保留内容、rollout 导入去重历史与响应 Token 记录，保留来源配置与设置。",
                             )
                         }}
                     </p>
@@ -2065,6 +2070,7 @@ pub fn confirmation(s: &State, action: Destructive, ui: Ui) -> AnyView {
                         "此操作会永久删除本地数据库中的匹配数据，无法在本应用内撤销。",
                     )}
             </p>
+            <p class="footnote">{l.text("Trace replay protection, including identity digests and bundle fingerprints, remains to prevent re-importing deleted records.", "追踪重放保护（包括标识摘要和数据包指纹）仍会保留，以防重新导入已删除记录。")}</p>
             <form on:submit=event_bridge::prevent(ui, Action::Perform)>
                 <label>
                     {l.text("Type to confirm", "输入以下内容确认")}": "

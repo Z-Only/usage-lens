@@ -1,5 +1,5 @@
 //! Pure dashboard transitions. A request may commit only while its generation and source still match.
-use chrono::{Days, NaiveDate};
+use chrono::{DateTime, Datelike, Days, NaiveDate, Utc};
 use num_bigint::BigUint;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -20,9 +20,10 @@ pub const TOKEN_KEYS: [&str; 6] = [
     "reasoningOutputTokens",
     "totalTokens",
 ];
-pub const PAGES: [Page; 5] = [
+pub const PAGES: [Page; 6] = [
     Page::Overview,
     Page::Activity,
+    Page::Traces,
     Page::Quotas,
     Page::Skills,
     Page::Settings,
@@ -57,6 +58,7 @@ pub enum Page {
     #[default]
     Overview,
     Activity,
+    Traces,
     Quotas,
     Skills,
     Settings,
@@ -66,6 +68,7 @@ impl Page {
         match self {
             Self::Overview => "overview",
             Self::Activity => "activity",
+            Self::Traces => "traces",
             Self::Quotas => "quotas",
             Self::Skills => "skills",
             Self::Settings => "settings",
@@ -75,6 +78,7 @@ impl Page {
         match self {
             Self::Overview => l.text("Overview", "概览"),
             Self::Activity => l.text("Activity", "活动"),
+            Self::Traces => l.text("Traces", "追踪"),
             Self::Quotas => l.text("Quotas", "额度"),
             Self::Skills => l.text("Skills", "技能"),
             Self::Settings => l.text("Settings", "设置"),
@@ -94,6 +98,9 @@ pub enum Slot {
     ResponseUsage,
     ResponseRecords,
     TokenPeriod,
+    Traces,
+    TraceSummary,
+    TraceDetail,
     Detail,
     Mutation,
 }
@@ -168,6 +175,9 @@ pub enum Action {
     Filter(&'static str, String),
     ApplyFilters,
     ApplyTokenPeriod,
+    ApplyTraceFilters,
+    TraceWeek(String),
+    ResetTraceFilters,
     ResetFilters,
     Drilldown(&'static str, String),
     SkillKind(String),
@@ -191,6 +201,8 @@ pub struct State {
     pub applied_filters: Filters,
     pub token_period: Filters,
     pub applied_token_period: Filters,
+    pub trace_filters: Filters,
+    pub applied_trace_filters: Filters,
     pub kind: String,
     pub selected: Value,
     pub settings: Value,
@@ -212,6 +224,8 @@ impl Default for State {
             applied_filters: Filters::default(),
             token_period: Filters::default(),
             applied_token_period: Filters::default(),
+            trace_filters: Filters::default(),
+            applied_trace_filters: Filters::default(),
             kind: "requested".into(),
             selected: Value::Null,
             settings: json!({"capturePaused":false,"contentCaptureEnabled":false,"retentionDays":30}),
@@ -277,6 +291,9 @@ impl State {
         match (slot, self.error(slot)) {
             (Slot::Activity, "invalid_date_range") => Action::ApplyFilters,
             (Slot::TokenPeriod, "invalid_token_period") => Action::ApplyTokenPeriod,
+            (Slot::Traces | Slot::TraceSummary, "invalid_trace_date_range") => {
+                Action::ApplyTraceFilters
+            }
             _ => Action::Load(slot, false),
         }
     }
@@ -349,6 +366,29 @@ impl State {
                     ("toDate", self.applied_token_period.to.clone()),
                 ],
             ),
+            Slot::Traces | Slot::TraceSummary => (
+                if slot == Slot::Traces {
+                    "traces"
+                } else {
+                    "traces/summary"
+                },
+                vec![
+                    ("fromDate", self.applied_trace_filters.from.clone()),
+                    ("toDate", self.applied_trace_filters.to.clone()),
+                    (
+                        "limit",
+                        if slot == Slot::Traces {
+                            "20".into()
+                        } else {
+                            String::new()
+                        },
+                    ),
+                ],
+            ),
+            Slot::TraceDetail => (
+                "traces/detail",
+                vec![("attemptId", string(&self.selected["attemptId"]).into())],
+            ),
             Slot::Detail => (
                 "events/detail",
                 vec![("eventId", string(&self.selected["eventId"]).into())],
@@ -376,6 +416,7 @@ impl State {
     fn load_page(&mut self) -> Vec<Request> {
         let slot = match self.page {
             Page::Activity => Slot::Activity,
+            Page::Traces => Slot::Traces,
             Page::Skills => Slot::Skills,
             Page::Quotas => Slot::History,
             _ => return vec![],
@@ -384,6 +425,9 @@ impl State {
             vec![]
         } else {
             let mut requests = self.dispatch(Action::Load(slot, false));
+            if self.page == Page::Traces {
+                requests.extend(self.dispatch(Action::Load(Slot::TraceSummary, false)));
+            }
             if self.page == Page::Skills && self.filters.skill_dates_valid() {
                 requests.push(self.request(Slot::SkillSummary, false));
             }
@@ -419,6 +463,14 @@ impl State {
                 self.selected = Value::Null;
                 self.action = None;
                 self.invalidate(Slot::Detail);
+                self.invalidate(Slot::TraceDetail);
+                if page != Page::Traces {
+                    for slot in [Slot::Traces, Slot::TraceSummary] {
+                        if let Some(remote) = self.remotes.get_mut(&slot) {
+                            remote.loading = false;
+                        }
+                    }
+                }
                 if page == Page::Activity {
                     self.dispatch(Action::ApplyFilters)
                 } else {
@@ -436,6 +488,13 @@ impl State {
                 if slot == Slot::Activity && !self.applied_filters.valid() {
                     self.invalidate(slot);
                     self.remotes.entry(slot).or_default().error = "invalid_date_range".into();
+                    return vec![];
+                }
+                if matches!(slot, Slot::Traces | Slot::TraceSummary)
+                    && !self.applied_trace_filters.valid()
+                {
+                    self.invalidate(slot);
+                    self.remotes.entry(slot).or_default().error = "invalid_trace_date_range".into();
                     return vec![];
                 }
                 if slot == Slot::TokenPeriod && !self.applied_token_period.skill_dates_valid() {
@@ -456,7 +515,13 @@ impl State {
                 }
                 self.selected = event;
                 self.invalidate(Slot::Detail);
-                vec![self.request(Slot::Detail, false)]
+                self.invalidate(Slot::TraceDetail);
+                let slot = if self.selected["attemptId"].is_string() {
+                    Slot::TraceDetail
+                } else {
+                    Slot::Detail
+                };
+                vec![self.request(slot, false)]
             }
             Action::Close => {
                 if !self.busy() {
@@ -464,6 +529,7 @@ impl State {
                     self.action = None;
                     self.confirmation.clear();
                     self.invalidate(Slot::Detail);
+                    self.invalidate(Slot::TraceDetail);
                 }
                 vec![]
             }
@@ -477,12 +543,33 @@ impl State {
                     "query" => self.filters.content_query = value,
                     "tokenFrom" => self.token_period.from = value,
                     "tokenTo" => self.token_period.to = value,
+                    "traceFrom" => self.trace_filters.from = value,
+                    "traceTo" => self.trace_filters.to = value,
                     _ => {}
                 }
                 if ["from", "to", "skillName"].contains(&field) {
                     self.invalidate(Slot::SkillSummary);
                 }
                 vec![]
+            }
+            Action::TraceWeek(now) => {
+                let Some(filters) = utc_week(&now) else {
+                    return vec![];
+                };
+                self.trace_filters = filters;
+                self.dispatch(Action::ApplyTraceFilters)
+            }
+            Action::ResetTraceFilters => {
+                self.trace_filters = Filters::default();
+                self.dispatch(Action::ApplyTraceFilters)
+            }
+            Action::ApplyTraceFilters => {
+                self.applied_trace_filters = self.trace_filters.clone();
+                self.invalidate(Slot::Traces);
+                self.invalidate(Slot::TraceSummary);
+                let mut jobs = self.dispatch(Action::Load(Slot::Traces, false));
+                jobs.extend(self.dispatch(Action::Load(Slot::TraceSummary, false)));
+                jobs
             }
             Action::ApplyTokenPeriod => {
                 if self.source.is_empty() {
@@ -652,13 +739,30 @@ impl State {
             }
         };
         if request.slot != Slot::Status && request.slot != Slot::Mutation {
-            let response_source = if request.slot == Slot::Detail {
+            let response_source = if request.slot == Slot::TraceSummary {
+                &request.source
+            } else if request.slot == Slot::TraceDetail {
+                string(&value["attempt"]["sourceId"])
+            } else if request.slot == Slot::Detail {
                 string(&value["event"]["sourceId"])
             } else {
                 string(&value["source"]["id"])
             };
             if response_source != request.source {
                 current.error = "source_mismatch".into();
+                return vec![];
+            }
+            if matches!(request.slot, Slot::Traces | Slot::TraceSummary)
+                && (string(&value["fromDate"]) != self.applied_trace_filters.from
+                    || string(&value["toDate"]) != self.applied_trace_filters.to)
+            {
+                current.error = "filter_mismatch".into();
+                return vec![];
+            }
+            if request.slot == Slot::TraceDetail
+                && string(&value["attempt"]["attemptId"]) != string(&self.selected["attemptId"])
+            {
+                current.error = "attempt_mismatch".into();
                 return vec![];
             }
             if request.slot == Slot::TokenPeriod
@@ -687,6 +791,7 @@ impl State {
             let key = match request.slot {
                 Slot::History => "observations",
                 Slot::ResponseRecords => "records",
+                Slot::Traces => "attempts",
                 _ => "events",
             };
             let mut combined = rows(&current.value[key]);
@@ -737,6 +842,22 @@ impl State {
             _ => vec![],
         }
     }
+}
+
+/// Calendar preset from the browser clock; independent of provider quota/reset windows.
+pub fn utc_week(now: &str) -> Option<Filters> {
+    let date = DateTime::parse_from_rfc3339(now)
+        .ok()?
+        .with_timezone(&Utc)
+        .date_naive();
+    let from =
+        date.checked_sub_days(Days::new(u64::from(date.weekday().num_days_from_monday())))?;
+    let to = from.checked_add_days(Days::new(6))?;
+    Some(Filters {
+        from: from.to_string(),
+        to: to.to_string(),
+        ..Filters::default()
+    })
 }
 
 pub fn string(value: &Value) -> &str {
@@ -952,7 +1073,10 @@ impl Action {
         let main = modal
             && !matches!(
                 self,
-                Self::Select(..) | Self::Close | Self::Confirm(..) | Self::Load(Slot::Detail, _)
+                Self::Select(..)
+                    | Self::Close
+                    | Self::Confirm(..)
+                    | Self::Load(Slot::Detail | Slot::TraceDetail, _)
             );
         (main, modal)
     }

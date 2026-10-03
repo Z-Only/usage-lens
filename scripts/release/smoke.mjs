@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { appendFile, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -12,7 +12,9 @@ import { createInterface } from 'node:readline';
 const [binaryArg, version] = process.argv.slice(2);
 assert(binaryArg && version, 'Expected extracted executable and version');
 const binary = resolve(binaryArg);
-const home = await mkdtemp(join(tmpdir(), 'usage-lens-isolated-smoke-'));
+// Canonicalize only our newly created synthetic directory: macOS /var is a
+// symlink, while the importer deliberately rejects linked path ancestors.
+const home = await realpath(await mkdtemp(join(tmpdir(), 'usage-lens-isolated-smoke-')));
 const env = Object.fromEntries(['PATH', 'SystemRoot', 'SYSTEMROOT', 'TEMP', 'TMP', 'TMPDIR', 'LANG'].filter(key => process.env[key]).map(key => [key, process.env[key]]));
 Object.assign(env, { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, 'unused-codex-home') });
 const children = new Set();
@@ -92,6 +94,8 @@ try {
   assert.deepEqual(trend.totals, {requested:'0', loaded:'0', invoked:'0', loadedEvidence:{mainRead:'0', instructionInjection:'0', unknown:'0'}});
   assert.equal(trend.skillsTruncated, false);
   run(['skill-summary', '--db', db, '--source', 'release-smoke', '--from', '2024-02-28'], 1);
+  assert.equal(JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke'])).coverage.capture, 'not_captured');
+  assert.equal(JSON.parse(run(['trace-summary', '--db', db, '--source', 'release-smoke'])).attemptCount, '0');
   const wrongSource = JSON.parse(run(['doctor', '--db', db, '--source', 'missing-source'], 1));
   assert.equal(wrongSource.status, 'failed');
   assert.deepEqual(await readFile(db), beforeQuery.bytes, 'Read-only diagnostics changed database bytes');
@@ -139,6 +143,122 @@ try {
   run(importArgs, 1);
   assert.deepEqual(await readFile(db), upgradedRead.bytes, 'Truncation must not mutate records or progress');
   assert.equal(JSON.parse(run(['health', '--db', db, '--source', 'release-smoke'])).stored.events.count, '1');
+
+  // One closed, explicitly selected synthetic RolloutTrace bundle. This does not
+  // enable recording, discover a client, or launch any model/runtime process.
+  const traceDirectory = join(home, 'selected-synthetic-trace');
+  await mkdir(join(traceDirectory, 'payloads'), { recursive: true });
+  const traceVersion = 'a956835d020762cb2b570053af06f643a11c0ecc';
+  const traceStart = Date.parse('2026-10-03T00:00:00.000Z');
+  const traceManifest = { schema_version: 1, trace_id: 'synthetic-trace', rollout_id: 'synthetic-rollout', root_thread_id: 'synthetic-thread', started_at_unix_ms: traceStart, raw_event_log: 'trace.jsonl', payloads_dir: 'payloads' };
+  const payloadRef = (ordinal, type) => ({ raw_payload_id: `raw_payload:${ordinal}`, path: `payloads/${ordinal}.json`, kind: { type } });
+  const traceEvent = (seq, payload) => JSON.stringify({ schema_version: 1, rollout_id: traceManifest.rollout_id, seq, wall_time_unix_ms: traceStart + seq, thread_id: 'synthetic-thread', codex_turn_id: 'synthetic-turn', payload });
+  const visibleMessage = (role, text, extra = {}) => ({ type: 'message', role, content: [{ type: role === 'assistant' ? 'output_text' : 'input_text', text }], ...extra });
+  const secretCanary = 'sk-proj-SyntheticOnlyNeverARealCredential123456';
+  const traceRequest = {
+    model: 'synthetic-model', reasoning: null,
+    instructions: 'EXCLUDED_SYSTEM_INSTRUCTIONS_CANARY',
+    input: [
+      visibleMessage('user', `Synthetic trace visible user ${secretCanary}`, { internal_chat_message_metadata_passthrough: { content_item_kinds: ['user.text'] } }),
+      visibleMessage('user', 'EXCLUDED_UNCLASSIFIED_USER_CANARY'),
+      visibleMessage('system', 'EXCLUDED_SYSTEM_CANARY'),
+      visibleMessage('developer', 'EXCLUDED_DEVELOPER_CANARY'),
+      visibleMessage('assistant', 'EXCLUDED_ANALYSIS_CANARY', { channel: 'analysis' }),
+      { type: 'function_call', arguments: 'EXCLUDED_TOOL_CANARY' },
+    ],
+  };
+  const traceResponse = {
+    output_items: [visibleMessage('assistant', 'Synthetic trace visible answer'), { type: 'reasoning', text: 'EXCLUDED_REASONING_CANARY' }],
+    response_id: 'synthetic-trace-response', upstream_request_id: 'synthetic-upstream-request',
+    token_usage: { input_tokens: 80, cached_input_tokens: 10, cache_write_input_tokens: 0, output_tokens: 20, reasoning_output_tokens: 5, total_tokens: 100 },
+  };
+  const started = { type: 'inference_started', inference_call_id: 'synthetic-inference', thread_id: 'synthetic-thread', codex_turn_id: 'synthetic-turn', model: 'synthetic-model', request_payload: payloadRef(1, 'inference_request') };
+  const completed = { type: 'inference_completed', inference_call_id: 'synthetic-inference', response_id: traceResponse.response_id, upstream_request_id: traceResponse.upstream_request_id, response_payload: payloadRef(2, 'inference_response') };
+  const failedStarted = { ...started, inference_call_id: 'synthetic-failed-inference', model: 7, request_payload: payloadRef(3, 'inference_request') };
+  const failed = { type: 'inference_failed', inference_call_id: 'synthetic-failed-inference', upstream_request_id: null, partial_response_payload: null };
+  const traceRows = [traceEvent(1, started), traceEvent(2, completed), traceEvent(3, failedStarted), traceEvent(4, failed)].join('\n') + '\n';
+  await writeFile(join(traceDirectory, 'manifest.json'), JSON.stringify(traceManifest));
+  await writeFile(join(traceDirectory, 'trace.jsonl'), traceRows);
+  await writeFile(join(traceDirectory, 'payloads/1.json'), JSON.stringify(traceRequest));
+  await writeFile(join(traceDirectory, 'payloads/2.json'), JSON.stringify(traceResponse));
+  await writeFile(join(traceDirectory, 'payloads/3.json'), JSON.stringify({ model: 7, reasoning: [], service_tier: null, input: [] }));
+  const traceImportArgs = ['import-trace-bundle', '--db', db, '--source', 'release-smoke', '--directory', traceDirectory, '--source-version', traceVersion];
+  const schema3BeforeTrace = await readFile(db);
+  assert.equal(JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke'])).coverage.capture, 'not_captured');
+  assert.equal(JSON.parse(run(['trace-summary', '--db', db, '--source', 'release-smoke'])).attemptCount, '0');
+  run([...traceImportArgs.slice(0, -1), 'unsupported-version'], 1);
+  assert.deepEqual(await readFile(db), schema3BeforeTrace, 'Rejected trace import or trace query migrated schema 3');
+  const traced = JSON.parse(run(traceImportArgs));
+  assert.equal(traced.attemptsInserted, '2');
+  assert.equal(traced.contentsRetained, '0');
+  assert.equal(traced.importAlreadyPresent, false);
+  const traceReadState = { bytes: await readFile(db), modified: (await stat(db)).mtimeMs, files: await readdir(home) };
+  assert.equal(JSON.parse(run(['doctor', '--db', db, '--source', 'release-smoke'])).database.schemaVersion, 4);
+  const tracePage = JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke', '--limit', '1']));
+  assert.equal(tracePage.attempts.length, 1);
+  assert(tracePage.nextCursor);
+  const traceNext = JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke', '--limit', '1', '--cursor', tracePage.nextCursor]));
+  const traceAttempt = traceNext.attempts[0];
+  assert.equal(traceAttempt.status, 'completed');
+  assert.equal(traceAttempt.evidence, 'prepared_request');
+  assert.equal(traceAttempt.request.model.value, 'synthetic-model');
+  assert.equal(traceAttempt.request.reasoningEffort.state, 'not_reported');
+  assert.equal(traceAttempt.request.serviceTier.state, 'omitted');
+  assert.equal(traceAttempt.observed.model.state, 'omitted');
+  assert.equal(traceAttempt.observed.serviceTier.state, 'omitted');
+  assert.equal(tracePage.attempts[0].request.model.state, 'invalid');
+  assert.equal(tracePage.attempts[0].request.reasoningEffort.state, 'invalid');
+  assert.equal(tracePage.attempts[0].request.serviceTier.state, 'not_reported');
+  assert.equal(tracePage.attempts[0].tokens, null);
+  const traceDetailArgs = ['trace-detail', '--db', db, '--source', 'release-smoke', '--attempt', traceAttempt.attemptId];
+  assert.equal(JSON.parse(run(traceDetailArgs)).content, null, 'Capture-off import retained visible text');
+  const traceSummary = JSON.parse(run(['trace-summary', '--db', db, '--source', 'release-smoke', '--from', '2026-10-03', '--to', '2026-10-03']));
+  assert.equal(traceSummary.attemptCount, '2');
+  assert.equal(traceSummary.tokenAttemptCount, '1');
+  assert.equal(traceSummary.totals.totalTokens, '100');
+  assert.equal(traceSummary.totals.inputTokens, '80');
+  assert.equal(traceSummary.coverage.dateBasis, 'attempt_start_utc');
+  assert.equal(traceSummary.coverage.completeness, 'partial');
+  assert.equal(traceSummary.coverage.accountTotalRelationship, 'not_combined');
+  run(['trace-summary', '--db', db, '--source', 'release-smoke', '--from', '2026-10-03'], 1);
+  run(['status', '--db', db]);
+  run(['health', '--db', db, '--source', 'release-smoke']);
+  assert.deepEqual(await readFile(db), traceReadState.bytes, 'Schema-4 queries changed database bytes');
+  assert.equal((await stat(db)).mtimeMs, traceReadState.modified, 'Schema-4 queries changed database mtime');
+  assert.deepEqual(await readdir(home), traceReadState.files, 'Schema-4 queries created a sidecar');
+  const traceRepeated = JSON.parse(run(traceImportArgs));
+  assert.equal(traceRepeated.attemptsInserted, '0');
+  assert.equal(traceRepeated.importAlreadyPresent, true);
+  assert.deepEqual(await readFile(db), traceReadState.bytes, 'Identical trace replay changed the store');
+  await writeFile(join(traceDirectory, 'payloads/1.json'), JSON.stringify({ ...traceRequest, model: 'changed-synthetic-model' }));
+  run(traceImportArgs, 1);
+  assert.deepEqual(await readFile(db), traceReadState.bytes, 'Conflicting trace import partially changed the store');
+  await writeFile(join(traceDirectory, 'payloads/1.json'), JSON.stringify(traceRequest));
+
+  run(['settings', '--db', db, '--content', 'true']);
+  run(traceImportArgs);
+  assert.equal(JSON.parse(run(traceDetailArgs)).content, null, 'Enabling capture backfilled an accepted trace');
+  run(['source', '--db', db, '--source', 'trace-visible', '--mode', 'imported', '--name', 'Synthetic visible trace']);
+  const visibleImportArgs = [...traceImportArgs];
+  visibleImportArgs[visibleImportArgs.indexOf('--source') + 1] = 'trace-visible';
+  assert.equal(JSON.parse(run(visibleImportArgs)).contentsRetained, '2');
+  const visibleDetailArgs = [...traceDetailArgs];
+  visibleDetailArgs[visibleDetailArgs.indexOf('--source') + 1] = 'trace-visible';
+  const visibleDetail = run(visibleDetailArgs);
+  assert.match(visibleDetail, /Synthetic trace visible user/);
+  assert.match(visibleDetail, /Synthetic trace visible answer/);
+  assert.match(visibleDetail, /REDACTED/);
+  for (const excluded of [secretCanary, 'EXCLUDED_SYSTEM_INSTRUCTIONS_CANARY', 'EXCLUDED_UNCLASSIFIED_USER_CANARY', 'EXCLUDED_SYSTEM_CANARY', 'EXCLUDED_DEVELOPER_CANARY', 'EXCLUDED_ANALYSIS_CANARY', 'EXCLUDED_TOOL_CANARY', 'EXCLUDED_REASONING_CANARY']) {
+    assert(!visibleDetail.includes(excluded), `Trace detail leaked excluded synthetic content: ${excluded}`);
+    assert(!(await readFile(db)).includes(Buffer.from(excluded)), 'Database retained excluded raw trace content');
+  }
+  run(['delete', '--db', db, '--source', 'trace-visible', '--target', 'content', '--confirm', 'DELETE']);
+  run(visibleImportArgs);
+  assert.equal(JSON.parse(run(visibleDetailArgs)).content, null, 'Trace replay resurrected deleted content');
+  run(['delete', '--db', db, '--source', 'trace-visible', '--target', 'all', '--confirm', 'DELETE']);
+  assert.equal(JSON.parse(run(visibleImportArgs)).attemptsInserted, '0', 'Trace replay resurrected all-data-deleted evidence');
+  assert.equal(JSON.parse(run(['trace-summary', '--db', db, '--source', 'trace-visible'])).attemptCount, '0');
+  assert.equal(await readFile(join(traceDirectory, 'payloads/1.json'), 'utf8'), JSON.stringify(traceRequest), 'Import/deletion changed raw source files');
 
   const server = start(['serve', '--demo', '--port', '0']);
   const line = await firstLine(server);
@@ -258,7 +378,7 @@ try {
   assert.equal((await request('tools/call', {name:'usage_skills', arguments:{sourceId:'demo',fromDate:'2024-01-01',toDate:'2025-01-01'}})).isError, true);
   lines.close();
   await stop(mcp);
-  console.log('Extracted native artifact passed SQLite persistence, schema-2/3 read-only queries, incremental append/no-op/truncation, doctor/health/skill trends, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
+  console.log('Extracted native artifact passed SQLite persistence, schema-2/3/4 read-only queries, incremental append/no-op/truncation, selected trace import/replay/conflict/privacy, doctor/health/skill trends, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
 } finally {
   clearTimeout(limit);
   await Promise.all([...children].map(stop));

@@ -296,6 +296,68 @@ to compare and cannot be reconstructed; adoption never backfills their content.
 Raw-evidence conflict checks apply from the first accepted incremental digest
 onward, independent of subsequent capture settings.
 
+## Selected RolloutTrace bundles (v0.6)
+
+The separate `import-trace-bundle --db ABS --source ID --directory ABS
+--source-version a956835d020762cb2b570053af06f643a11c0ecc` reads one bounded,
+explicitly selected upstream `rust-v0.160.0` diagnostic bundle. The contract,
+limits, exact source links and local query workflow are in [trace import](trace-import.md).
+It does not discover directories, watch files, enable recording, install or
+configure a client, launch another process or make a model request.
+
+Attempt records are prepared-request evidence; upstream records them before
+transmission, and WebSocket warmup can record logical full input rather than exact
+wire bytes. A trace attempt may encompass lower-level transport retries. Completion
+payloads summarize completed output, identifiers and optional usage rather than
+all stream frames. An absent terminal event or missing usage stays unknown.
+Neither attempt count nor completion evidence is a delivery or billing receipt.
+
+Request model, `reasoning.effort` and `service_tier` remain request-side metadata.
+The pinned completion summary omits observed model/tier, so they are not copied
+from the request. Reported, explicit null, omitted and invalid states are distinct.
+Missing effort/tier never means a default, Fast or Standard. Recorded trace tokens
+are a separate possibly overlapping population from ordinary rollout tokens and
+account usage. Date-selected trace totals are not exact weekly quota, purchased
+credits, API charges, a quota-to-token conversion or per-skill attribution.
+
+Trace query date ranges use attempt-start UTC instants. The local dashboard's
+current-week preset is Monday–Sunday UTC, not a provider quota cycle. Sequence and
+lifecycle determine start/terminal association; backward wall-clock timestamps
+remain unchanged with `trace_clock_regression`, without inferred durations.
+A completion `token_usage` parent must be an object or null/absent. Failed/cancelled
+partial responses cannot carry non-null response IDs or usage; incompatible parent
+or partial-response shapes reject the bundle rather than implying completion.
+
+Trace imports persist safe warning codes. Read-only trace queries return them
+in `importWarnings` with `scope: "all_retained_source"`, bounded to the latest
+100 imports and 100 distinct codes plus an explicit `truncated` flag. This source-wide import scope is independent
+of attempt-date filters, retained attempt counts and record deletion. Summary
+metadata dimensions return at most 500 lexically first `(state, value)` groups;
+The top-level boolean `groupsTruncated` marks omitted groups while overall totals cover all matching
+retained attempts. Neither bounded groups nor retained totals imply full history.
+
+The local trace attempt/detail/summary queries do not expand the conversational
+Skill/MCP allowlists. Optional content is a redacted supported visible-text
+projection with conservative classification, excluding system/developer and hidden
+reasoning content; raw files stay untouched. User-role text needs exact aligned
+`user.text` classification. Assistant phase is absent/null, `commentary` or
+`final_answer`, with nonempty/invalid typed content kinds excluded. Windows UNC,
+network and device bundle roots are rejected before opening; only local drive
+paths with no linked/reparse components are supported. Atomic import/replay
+metadata prevents
+unchanged imports, retention, content deletion or all-data deletion from
+resurrecting accepted trace data. All-data deletion preserves trace replay metadata,
+unlike the ordinary incremental rollout reset behavior.
+Bundle/attempt records are immutable; later modifications to an already imported
+bundle are conflicts, not incremental updates. Select a closed stable bundle.
+
+Only a successful explicit trace import upgrades schema 2/3 to schema 4. **Make a
+verified closed-store backup first. v0.5.0 and older cannot read schema 4.**
+v0.6.0 read-only queries support rollback-journal schemas 2/3/4 without migration;
+normal opens do not automatically enable trace storage. Exact local synthetic
+checks do not establish desktop runtime compatibility or environment inheritance.
+Live desktop validation remains pending separate user authorization.
+
 ## v0.5 local reading queries
 
 The local-only retained-content search now supports bounded cursor pagination and

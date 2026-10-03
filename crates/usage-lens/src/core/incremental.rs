@@ -93,10 +93,10 @@ impl UsageStore {
         Ok(safe(
             self.db()?
                 .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0)),
-        )? == 3)
+        )? >= 3)
     }
     /// Called only inside a successful explicit incremental-import transaction.
-    fn migrate_incremental(&self) -> CoreResult<()> {
+    pub(super) fn migrate_incremental(&self) -> CoreResult<()> {
         if self.has_incremental_schema()? {
             return Ok(());
         }

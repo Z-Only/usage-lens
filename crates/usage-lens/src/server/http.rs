@@ -256,6 +256,24 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
             ("/api/status", (&[][..], &[][..])),
             ("/api/settings", (&[][..], &[][..])),
             (
+                "/api/traces",
+                (
+                    &["sourceId", "fromDate", "toDate", "cursor", "limit"][..],
+                    &["sourceId"][..],
+                ),
+            ),
+            (
+                "/api/traces/summary",
+                (&["sourceId", "fromDate", "toDate"][..], &["sourceId"][..]),
+            ),
+            (
+                "/api/traces/detail",
+                (
+                    &["sourceId", "attemptId"][..],
+                    &["sourceId", "attemptId"][..],
+                ),
+            ),
+            (
                 "/api/health",
                 (&["sourceId", "maxAgeMs"][..], &["sourceId"][..]),
             ),
@@ -367,6 +385,9 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
         let input = query(raw_query.as_deref(), allowed, required)?;
         let store = state.store.lock().map_err(|_| bad("request_failed"))?;
         let result = match path.as_str() {
+            "/api/traces" => store.get_trace_attempts(&input),
+            "/api/traces/summary" => store.get_trace_summary(&input),
+            "/api/traces/detail" => store.get_local_trace_detail(&input),
             "/api/status" => store.get_status(),
             "/api/settings" => store.get_settings(),
             "/api/health" => store.get_health(&input),
