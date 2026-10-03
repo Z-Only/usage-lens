@@ -21,6 +21,7 @@ fn full() -> State {
     for (slot, key) in [
         (Slot::Status, "status"),
         (Slot::Overview, "overview"),
+        (Slot::Health, "health"),
         (Slot::Recent, "events"),
         (Slot::Activity, "events"),
         (Slot::Skills, "skills"),
@@ -519,4 +520,179 @@ fn scrollable_tables_contain_accessible_labels_without_hiding_page_content() {
         .unwrap();
     assert!(quota_unit_rule.contains("margin-inline-start: 0.35em"));
     assert!(render(full()).contains("<span class=\"sr-only\">Details</span>"));
+}
+
+#[test]
+fn health_is_visible_on_overview_and_settings_without_needing_overview_success() {
+    for page in [Page::Overview, Page::Settings] {
+        for l in [Language::English, Language::Chinese] {
+            let mut s = full();
+            s.page = page;
+            s.language = l;
+            s.remotes.remove(&Slot::Overview);
+            s.remotes.entry(Slot::Overview).or_default().error = "overview_unavailable".into();
+            let html = render(s);
+            assert!(html.contains(l.text("Collection health &amp; coverage", "采集健康与覆盖")));
+            assert!(html.contains("account/usage/read"));
+        }
+    }
+    assert!(!render(State::default()).contains("collection-health-title"));
+    let mut s = full();
+    s.page = Page::Activity;
+    assert!(!render(s).contains("collection-health-title"));
+}
+#[test]
+fn health_keeps_exact_counts_scope_and_unknown_history_in_both_languages() {
+    for l in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.language = l;
+        let health = &mut s.remotes.get_mut(&Slot::Health).unwrap().value;
+        health["stored"]["events"]["count"] = json!("9007199254740993123456");
+        health["stored"]["skills"]["count"] = json!("0");
+        health["stored"]["responseTokens"]["count"] = Value::Null;
+        health["stored"]["imports"]["lastImportedAt"] = Value::Null;
+        health["stored"]["events"]["unknownOccurredAtCount"] = json!("9007199254740993123456");
+        let h = render_with(s, collection_health);
+        for text in [
+            l.text("Stored records only", "仅限已存储记录"),
+            l.text("No live account access check", "未检查实时账户访问"),
+            l.text(
+                "Zero records does not prove zero historical usage",
+                "零记录不能证明历史用量为零",
+            ),
+            l.text("Skill evidence", "技能证据"),
+            l.text("Response token records", "响应 Token 记录"),
+            l.text("Occurrence time unknown", "发生时间未知"),
+            l.text("Missing records: Unknown", "缺失记录：未知"),
+            l.text("History before collection: Unknown", "采集之前的历史：未知"),
+            "9,007,199,254,740,993,123,456",
+            "2026-10-02T00:00:00Z",
+        ] {
+            assert!(h.contains(text), "missing {text}");
+        }
+        assert!(!h.contains("<progress"));
+        assert!(!h.contains('%'));
+        assert!(!h.contains("9007199254740993000000"));
+    }
+}
+#[test]
+fn health_missing_available_unsupported_and_error_remain_independent() {
+    for l in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.language = l;
+        let h = &mut s.remotes.get_mut(&Slot::Health).unwrap().value;
+        h["observations"][0]["availability"] = json!("missing");
+        h["observations"][0]["capability"] = json!("unknown");
+        h["observations"][0]["freshness"] = json!({"state":"unknown"});
+        h["observations"][1]["capability"] = json!("unsupported");
+        h["observations"][1]["freshness"]["state"] = json!("stale");
+        h["observations"][1]["lastFailure"] = json!({"errorCode":"method_not_found","attemptedAt":"2026-10-02T00:04:00Z","state":"recent","atOrAfterLatestObservation":true});
+        h["observations"][2]["freshness"]["state"] = json!("future");
+        let html = render_with(s, collection_health);
+        for text in [
+            l.text("Missing", "缺失"),
+            l.text("Available", "可用"),
+            l.text("Unsupported", "不支持"),
+            l.text("Unknown", "未知"),
+            l.text("Stale", "已过期"),
+            l.text("Future timestamp", "未来时间戳"),
+            l.text("Last recorded error", "最近记录的错误"),
+            l.text(
+                "freshness cannot be treated as current",
+                "不可将其视为最新状态",
+            ),
+            l.text(
+                "At or after the retained snapshot, if any",
+                "等于或晚于保留的快照（如有）",
+            ),
+            "method_not_found",
+            "2026-10-02T00:04:00Z",
+        ] {
+            assert!(html.contains(text), "missing {text}");
+        }
+    }
+}
+#[test]
+fn health_prior_error_is_not_claimed_to_be_latest_attempt_failure() {
+    for l in [Language::English, Language::Chinese] {
+        for (relation, label) in [
+            (
+                json!(false),
+                l.text("Earlier than the retained snapshot", "早于保留的快照"),
+            ),
+            (
+                Value::Null,
+                l.text(
+                    "Relation to retained snapshot: Unknown",
+                    "与保留快照的先后关系：未知",
+                ),
+            ),
+        ] {
+            let mut s = full();
+            s.language = l;
+            s.remotes.get_mut(&Slot::Health).unwrap().value["observations"][0]["lastFailure"] = json!({"errorCode":"read_error","state":"stale","atOrAfterLatestObservation":relation});
+            let html = render_with(s, collection_health);
+            assert!(html.contains(label));
+            assert!(html.contains(l.text("Last recorded error", "最近记录的错误")));
+            assert!(!html.contains("Latest attempt failed"));
+        }
+    }
+}
+#[test]
+fn health_loading_error_retry_and_retained_response_are_explicit() {
+    for l in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.language = l;
+        s.remotes.remove(&Slot::Health);
+        let html = render_with(s.clone(), collection_health);
+        assert!(html.contains(l.text("Collection health is unknown", "采集健康状态未知")));
+        assert!(html.contains(l.text("Retry health", "重试健康检查")));
+        s.remotes.entry(Slot::Health).or_default().loading = true;
+        let html = render_with(s.clone(), collection_health);
+        assert!(html.contains(l.text("Reading collection health", "正在读取采集健康状态")));
+        assert!(html.contains("aria-busy=\"true\""));
+        assert!(html.contains("disabled"));
+        s.remotes.get_mut(&Slot::Health).unwrap().loading = false;
+        s.remotes.get_mut(&Slot::Health).unwrap().error = "health_request_failed".into();
+        let html = render_with(s.clone(), collection_health);
+        assert!(html.contains(l.text("Could not read collection health", "无法读取采集健康状态")));
+        assert!(html.contains("health_request_failed"));
+        assert!(!html.contains(l.text(
+            "Showing the previous health response",
+            "正在显示上次健康响应"
+        )));
+        s.remotes.get_mut(&Slot::Health).unwrap().value = fixture("health");
+        let html = render_with(s, collection_health);
+        assert!(html.contains(l.text(
+            "Showing the previous health response",
+            "正在显示上次健康响应"
+        )));
+        assert!(html.contains("account/read"));
+    }
+}
+#[test]
+fn health_capture_setting_and_notes_are_safe_and_have_explicit_scope() {
+    for l in [Language::English, Language::Chinese] {
+        for (value, label) in [
+            (json!(true), l.text("Paused", "已暂停")),
+            (json!(false), l.text("Not paused", "未暂停")),
+            (Value::Null, l.text("Unknown", "未知")),
+        ] {
+            let mut s = full();
+            s.language = l;
+            let h = &mut s.remotes.get_mut(&Slot::Health).unwrap().value;
+            h["settings"]["capturePaused"] = value;
+            h["warnings"] = json!(["<img src=x onerror=alert(1)>"]);
+            let html = render_with(s, collection_health);
+            assert!(html.contains(label));
+            assert!(html.contains(l.text("All sources", "所有来源")));
+            assert!(html.contains(l.text(
+                "Not paused does not confirm that a collector is running",
+                "未暂停不代表采集器正在运行"
+            )));
+            assert!(html.contains(l.text("Collection health notes", "采集健康说明")));
+            assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
+            assert!(!html.contains("<img"));
+        }
+    }
 }

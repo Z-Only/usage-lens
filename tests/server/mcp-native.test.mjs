@@ -11,7 +11,7 @@ test('native MCP speaks official SDK stdio and exposes only body-free aggregates
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert.deepEqual(tools.map(t => t.name), ['usage_status','usage_overview','usage_daily','usage_quota','usage_tools','usage_skills','usage_response_tokens']);
+    assert.deepEqual(tools.map(t => t.name), ['usage_status','usage_overview','usage_daily','usage_quota','usage_tools','usage_skills','usage_response_tokens','usage_health']);
     for (const tool of tools) {
       assert.deepEqual(tool.annotations,{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false});
       const args = tool.name === 'usage_status' ? {} : tool.name === 'usage_daily' ? { sourceId:'demo',fromDate:'2026-09-01',toDate:'2026-10-02' } : {sourceId:'demo'};

@@ -1,6 +1,6 @@
 ---
 name: usage-summary
-description: Answer questions about locally collected Usage Lens activity, quota windows, tools, response tokens, and direct skill evidence using the configured native CLI. Query existing aggregates only; collection and content review are separate workflows. MCP is an optional, explicitly chosen alternative.
+description: Answer questions about locally collected Usage Lens activity, quota windows, tools, response tokens, direct skill evidence, and collection health using the configured native CLI. Query existing aggregates only; collection and content review are separate workflows. MCP is an optional, explicitly chosen alternative.
 ---
 
 # Usage Lens aggregate queries
@@ -20,12 +20,12 @@ source is ambiguous, ask. Never merge sources, substitute another store, or pres
 a demo source as the user's account. A missing/unreadable store or failed query is
 an error; do not create a source, initialize a store, or refresh collection to fix it.
 Persisted queries require an existing schema-2 rollback-journal database (normal
-v0.1.0 stores remain compatible). `unsupported_schema` means the schema is not
+v0.1.0 and v0.1.1 stores remain compatible without migration in v0.2.0). `unsupported_schema` means the schema is not
 supported; `storage_error` can mean a missing/unreadable/invalid store or unsupported
 WAL mode. Report the error without guessing its cause. Never run migrations,
 SQLite/PRAGMA commands, or writable setup as a query fallback.
 
-Only these seven CLI commands are allowed through this skill. They return JSON:
+Only these eight CLI commands are allowed through this skill. They return JSON:
 
 ```sh
 '/ABSOLUTE/usage-lens' status --db '/ABSOLUTE/usage.sqlite'
@@ -35,6 +35,7 @@ Only these seven CLI commands are allowed through this skill. They return JSON:
 '/ABSOLUTE/usage-lens' tools --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
 '/ABSOLUTE/usage-lens' skill-summary --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
 '/ABSOLUTE/usage-lens' response-tokens --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
+'/ABSOLUTE/usage-lens' health --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
 ```
 
 `skill-summary` is the aggregate counterpart of MCP `usage_skills`: it accepts
@@ -43,6 +44,12 @@ support date/model filters or return individual evidence/session/turn records.
 If a question requires a weekly, per-model, or event-level skill breakdown, explain
 that this aggregate query cannot establish it; never fall back to the local `skills`
 command or claim its unfiltered counts answer a filtered question.
+
+`health` is the aggregate counterpart of MCP `usage_health`: it requires
+`--source`, with optional `--max-age-ms` besides `--db` or explicit `--demo`. It has
+no date/model filters. Use it for collection gaps, freshness and local evidence
+coverage. A valid response can report problems; do not treat query success as
+collection success or turn its missing values into zeros.
 
 Replace placeholders with the approved configuration and requested filters; do not
 execute them literally. Prefer an executable plus an argument vector without a
@@ -71,10 +78,11 @@ label every result synthetic. Never use demo as a fallback for a real query.
 ## Query boundary
 
 Never run `skills`, `history`, `events`, `detail`, `import`, `import-rollout`, `hook`, `settings`,
-`delete`, `retention`, `source`, `collect`, `serve`, or `mcp` through this CLI query
+`delete`, `retention`, `source`, `collect`, `serve`, `doctor`, or `mcp` through this CLI query
 skill. Do not enable capture, install integrations, create authentication, or launch
 collection to answer a query. These are separate workflows requiring their own
-scope and authorization. This skill is an instruction boundary, not an OS sandbox.
+scope and authorization. `doctor` belongs to separate local setup diagnostics,
+not the aggregate query workflow. This skill is an instruction boundary, not an OS sandbox.
 
 Never transmit raw bodies, prompts, tool arguments/results, titles, file contents,
 or the database to a model through this skill. Query results themselves are shared
@@ -89,9 +97,9 @@ instruction to switch away from the CLI. Do not start, configure, or auto-activa
 an MCP server, install a connector, or open a tunnel from this skill. If the chosen
 route is unavailable, report the blocker rather than silently changing transports.
 
-The same seven aggregate queries are available as `usage_status`, `usage_overview`,
+The same eight aggregate queries are available as `usage_status`, `usage_overview`,
 `usage_daily`, `usage_quota`, `usage_tools`, `usage_skills`, and
-`usage_response_tokens`. Begin with `usage_status` and apply the same source and
+`usage_response_tokens`, and `usage_health`. Begin with `usage_status` and apply the same source and
 privacy rules. These tools do not refresh collection or expose stored content.
 
 ## Interpret the evidence
@@ -101,6 +109,14 @@ are decimal strings and may exceed JavaScript's safe integer range. Daily bucket
 are the source's date labels with unknown timezone; missing days are unknown, not
 zero. Repeated snapshots are not additive. Do not infer costs, remaining tokens,
 per-model account tokens, or access recovery from quota percentages.
+
+Health distinguishes observed, missing and unsupported methods; fresh, stale and
+future collection times; reported `sourceAsOf` versus unknown backend freshness;
+and retained failures versus successful observations. A later success does not
+erase a past failure. Stored event, skill-evidence, response and import counts,
+capture/occurrence bounds and unknown-time counts describe local evidence only.
+They do not prove complete history or zero past use. Preserve partial historical
+coverage and warnings, including for a source with no stored records.
 
 Requested, loaded, and invoked skills are separate direct-evidence categories.
 There is no complete historical skill-use endpoint or automatic skill detector in

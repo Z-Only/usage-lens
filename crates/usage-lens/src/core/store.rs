@@ -1,3 +1,6 @@
+#[path = "health.rs"]
+mod health;
+
 use super::{
     normalize::{count, normalize_account, normalize_rate_limits, normalize_usage},
     redact::{CONTENT_WARNING, sanitize_content},

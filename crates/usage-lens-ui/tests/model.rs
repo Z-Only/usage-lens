@@ -8,10 +8,10 @@ fn loaded() -> State {
     let r = s.dispatch(Action::Refresh).remove(0);
     let jobs = s.complete(&r, Ok(fixture("status")));
     for r in jobs {
-        let key = if r.slot == Slot::Overview {
-            "overview"
-        } else {
-            "events"
+        let key = match r.slot {
+            Slot::Overview => "overview",
+            Slot::Health => "health",
+            _ => "events",
         };
         s.complete(&r, Ok(fixture(key)));
     }
@@ -493,4 +493,114 @@ fn transport_response_errors_are_allowlisted_codes_with_safe_fallback() {
         response_result(false, json!({"message":"raw server internals"})),
         Err("request_failed".into())
     );
+}
+
+#[test]
+fn health_request_is_source_scoped_and_loaded_after_status() {
+    let mut s = State::default();
+    assert!(s.dispatch(Action::Load(Slot::Health, false)).is_empty());
+    let status = s.dispatch(Action::Refresh).remove(0);
+    let jobs = s.complete(&status, Ok(fixture("status")));
+    let health = jobs.iter().find(|r| r.slot == Slot::Health).unwrap();
+    assert_eq!(health.path, "/api/health?maxAgeMs=900000&sourceId=demo");
+    assert!(health.body.is_none());
+    assert!(s.accepts(health));
+    s.complete(health, Ok(fixture("health")));
+    assert_eq!(s.data(Slot::Health)["stored"]["events"]["count"], "2");
+    assert!(!s.loading(Slot::Health));
+}
+#[test]
+fn health_retry_clears_error_and_preserves_last_response() {
+    let mut s = loaded();
+    let r = request(&mut s, Slot::Health);
+    s.complete(&r, Err("health_failed".into()));
+    assert_eq!(s.error(Slot::Health), "health_failed");
+    assert_eq!(s.data(Slot::Health)["source"]["id"], "demo");
+    let retry = request(&mut s, Slot::Health);
+    assert!(s.error(Slot::Health).is_empty());
+    assert!(s.loading(Slot::Health));
+    s.complete(&retry, Ok(fixture("health")));
+    assert!(!s.loading(Slot::Health));
+}
+#[test]
+fn health_source_switch_refresh_and_superseded_requests_discard_late_results() {
+    for action in [Action::Source("other".into()), Action::Refresh] {
+        for result in [Ok(fixture("health")), Err("late_health_failure".into())] {
+            let mut s = loaded();
+            let r = request(&mut s, Slot::Health);
+            s.dispatch(action.clone());
+            assert!(!s.accepts(&r));
+            s.complete(&r, result);
+            assert!(s.error(Slot::Health).is_empty());
+            if matches!(action, Action::Source(_)) {
+                assert!(s.data(Slot::Health).is_null());
+            }
+        }
+    }
+    let mut s = loaded();
+    let older = request(&mut s, Slot::Health);
+    let newer = request(&mut s, Slot::Health);
+    s.complete(&older, Err("older".into()));
+    assert!(s.error(Slot::Health).is_empty());
+    assert!(s.loading(Slot::Health));
+    s.complete(&newer, Ok(fixture("health")));
+    assert!(!s.loading(Slot::Health));
+}
+#[test]
+fn health_rejects_mismatched_source_and_no_sources_clear_it() {
+    let mut s = loaded();
+    let r = request(&mut s, Slot::Health);
+    let mut health = fixture("health");
+    health["source"]["id"] = json!("other");
+    s.complete(&r, Ok(health));
+    assert_eq!(s.error(Slot::Health), "source_mismatch");
+    assert_eq!(s.data(Slot::Health)["source"]["id"], "demo");
+    let r = s.dispatch(Action::Refresh).remove(0);
+    let mut status = fixture("status");
+    status["sources"] = json!([]);
+    s.complete(&r, Ok(status));
+    assert!(s.data(Slot::Health).is_null());
+    assert!(s.error(Slot::Health).is_empty());
+}
+#[test]
+fn health_labels_preserve_distinct_states_and_exact_or_unknown_counts() {
+    for l in [Language::English, Language::Chinese] {
+        let mut labels = std::collections::BTreeSet::new();
+        for state in [
+            "available",
+            "missing",
+            "observed",
+            "unsupported",
+            "fresh",
+            "stale",
+            "future",
+            "recent",
+            "unknown",
+        ] {
+            assert!(labels.insert(health_state_text(&json!(state), l)));
+        }
+        assert_eq!(
+            health_state_text(&json!("unexpected"), l),
+            l.text("Unknown", "未知")
+        );
+        assert_eq!(
+            health_state_text(&Value::Null, l),
+            l.text("Unknown", "未知")
+        );
+        assert_eq!(health_count(&json!("0"), l), "0");
+        assert_eq!(
+            health_count(&json!("9007199254740993123456"), l),
+            "9,007,199,254,740,993,123,456"
+        );
+        for value in [Value::Null, json!(0), json!(""), json!("-1"), json!("1.5")] {
+            assert_eq!(health_count(&value, l), l.text("Unknown", "未知"));
+        }
+        for value in [Value::Null, json!(""), json!(123)] {
+            assert_eq!(health_timestamp(&value, l), l.text("Unknown", "未知"));
+        }
+        assert_eq!(
+            health_timestamp(&json!("2026-10-02T00:00:00Z"), l),
+            "2026-10-02T00:00:00Z"
+        );
+    }
 }

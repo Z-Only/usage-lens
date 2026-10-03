@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -18,10 +18,10 @@ Object.assign(env, { HOME: home, USERPROFILE: home, CODEX_HOME: join(home, 'unus
 const children = new Set();
 const limit = setTimeout(() => { throw new Error('Packaged smoke timed out'); }, 45000);
 
-function run(args) {
+function run(args, expectedStatus = 0) {
   const result = spawnSync(binary, args, { cwd: home, env, encoding: 'utf8', timeout: 10000 });
   assert.equal(result.error, undefined, String(result.error));
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, expectedStatus, result.stderr);
   return result.stdout;
 }
 function start(args) {
@@ -47,6 +47,19 @@ async function firstLine(child) {
 
 try {
   assert.match(run(['--help']), new RegExp(version.replaceAll('.', '\\.')));
+  const setup = JSON.parse(run(['doctor']));
+  assert.equal(setup.schemaVersion, 1);
+  assert.equal(setup.application.version, version);
+  assert.equal(setup.status, 'incomplete');
+  assert.equal(setup.scope, 'read_only_setup_diagnostics');
+  assert.equal(setup.database, null);
+  assert.equal(setup.sourceHealth, null);
+  assert(setup.checks.some(check => check.id === 'dashboard' && check.status === 'pass'));
+  assert.deepEqual(await readdir(home), [], 'Setup-only doctor must not create local state');
+  const absent = JSON.parse(run(['doctor', '--db', join(home, 'not-created.sqlite')], 1));
+  assert.equal(absent.status, 'failed');
+  assert(absent.checks.some(check => check.id === 'database' && check.status === 'fail'));
+  assert.deepEqual(await readdir(home), [], 'Failed doctor must not create the missing store');
   const demo = JSON.parse(run(['status', '--demo']));
   assert(Array.isArray(demo.sources) && demo.sources.length > 0, 'Synthetic demo must seed SQLite');
   // Native SQLite must create, close, and reopen a disposable persistent store.
@@ -54,6 +67,27 @@ try {
   run(['source', '--db', db, '--source', 'release-smoke', '--mode', 'imported', '--name', 'Synthetic release smoke']);
   const persisted = JSON.parse(run(['status', '--db', db]));
   assert(persisted.sources.some(source => source.id === 'release-smoke'));
+  const beforeQuery = { bytes: await readFile(db), modified: (await stat(db)).mtimeMs, files: await readdir(home) };
+  const ready = JSON.parse(run(['doctor', '--db', db, '--source', 'release-smoke']));
+  assert.equal(ready.status, 'ready');
+  assert.equal(ready.database.schemaVersion, 2);
+  assert.equal(ready.database.accessMode, 'read_only');
+  assert.equal(ready.database.journalMode, 'rollback');
+  const health = JSON.parse(run(['health', '--db', db, '--source', 'release-smoke']));
+  assert.equal(health.schemaVersion, 1);
+  assert.equal(health.source.id, 'release-smoke');
+  assert.equal(health.coverage.completeness, 'partial');
+  assert.equal(health.coverage.preCollectionHistory, 'unknown');
+  assert(health.observations.every(observation => observation.availability === 'missing'));
+  for (const kind of ['events', 'skills', 'responseTokens', 'imports']) {
+    assert.equal(health.stored[kind].count, '0');
+    assert.deepEqual(ready.sourceHealth.stored[kind], health.stored[kind]);
+  }
+  const wrongSource = JSON.parse(run(['doctor', '--db', db, '--source', 'missing-source'], 1));
+  assert.equal(wrongSource.status, 'failed');
+  assert.deepEqual(await readFile(db), beforeQuery.bytes, 'Read-only diagnostics changed database bytes');
+  assert.equal((await stat(db)).mtimeMs, beforeQuery.modified, 'Read-only diagnostics changed database mtime');
+  assert.deepEqual(await readdir(home), beforeQuery.files, 'Read-only diagnostics created a sidecar');
 
   const server = start(['serve', '--demo', '--port', '0']);
   const line = await firstLine(server);
@@ -120,14 +154,22 @@ try {
   assert.equal(initialized.serverInfo.version, version);
   mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
   const { tools } = await request('tools/list', {});
-  const expected = ['usage_status', 'usage_overview', 'usage_daily', 'usage_quota', 'usage_tools', 'usage_skills', 'usage_response_tokens'];
+  const expected = ['usage_status', 'usage_overview', 'usage_daily', 'usage_quota', 'usage_tools', 'usage_skills', 'usage_response_tokens', 'usage_health'];
   assert.deepEqual(tools.map(tool => tool.name).sort(), expected.sort());
   const result = await request('tools/call', { name: 'usage_status', arguments: {} });
   assert(!result.isError);
-  assert(JSON.parse(result.content[0].text).sources.length > 0);
+  const mcpStatus = JSON.parse(result.content[0].text);
+  assert(mcpStatus.sources.length > 0);
+  const mcpHealth = await request('tools/call', { name: 'usage_health', arguments: { sourceId: mcpStatus.sources[0].id } });
+  assert(!mcpHealth.isError);
+  const aggregate = JSON.parse(mcpHealth.content[0].text);
+  assert.equal(aggregate.source.id, mcpStatus.sources[0].id);
+  assert.equal(aggregate.coverage.completeness, 'partial');
+  assert.equal(aggregate.provenance.estimated, false);
+  assert(Array.isArray(aggregate.observations));
   lines.close();
   await stop(mcp);
-  console.log('Extracted native artifact passed SQLite persistence, CLI, embedded demo HTTP/UI, and aggregate-only stdio MCP smoke');
+  console.log('Extracted native artifact passed SQLite persistence, read-only doctor/health, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
 } finally {
   clearTimeout(limit);
   await Promise.all([...children].map(stop));

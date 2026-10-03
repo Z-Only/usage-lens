@@ -847,6 +847,81 @@ form > label {
 .history-row .panel {
   margin: 16px 0 0;
 }
+.health-panel {
+  margin-top: 16px;
+  overflow-wrap: anywhere;
+}
+.health-panel .section-heading {
+  flex-wrap: wrap;
+}
+.health-panel .section-heading .text-button {
+  flex-shrink: 0;
+}
+.health-summary,
+.health-gaps {
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--canvas);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.health-methods,
+.health-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.health-method,
+.health-count {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+}
+.health-method h3 {
+  font-size: 12px;
+}
+.health-method dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 8px;
+  font-size: 11px;
+  margin: 14px 0 0;
+}
+.health-method dt,
+.health-count p {
+  color: var(--muted);
+}
+.health-method dd {
+  margin: 0;
+}
+.health-warning,
+.health-failure {
+  color: var(--warning);
+}
+.health-failure {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+.health-count h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.health-count > strong {
+  display: block;
+  font-size: 22px;
+  margin: 6px 0;
+  font-variant-numeric: tabular-nums;
+}
+.health-count p,
+.health-empty {
+  font-size: 11px;
+  margin-top: 6px;
+}
 .settings-panel {
   max-width: 900px;
 }

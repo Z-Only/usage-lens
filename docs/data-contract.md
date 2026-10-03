@@ -18,6 +18,64 @@ The account projection omits email, account IDs and credentials. A local source 
 
 Each observation records its source, method, adapter/schema version, collection time, optional source-as-of time, and last safe collection failure. The collection timestamp is not the backend's freshness timestamp. Startup or initialization failures remain visible alongside retained observations. A successful null response replaces an older value rather than silently carrying it forward.
 
+## Collection health
+
+`health --db ABS --source ID [--max-age-ms N]` and optional MCP `usage_health`
+return the same aggregate projection for one explicitly selected source. A local
+HTTP/UI health view uses that projection too. `--demo` is explicit synthetic input,
+never a fallback when a real store or query fails. Health is read-only and does not
+run the account adapter, import files, scan configuration, or install a collector.
+
+Interpret the independent signals together:
+
+- `availability` is `available` or `missing`; independently, `capability` is
+  `observed`, `unsupported` or `unknown`. An unsupported method can still have a
+  retained observation; retain both facts
+- Collection freshness describes local receipt time using the requested maximum
+  age. Fresh, stale and future-dated collection times remain distinct. This does
+  not establish when the provider last updated its data
+- `sourceAsOf` is a source-reported timestamp when supplied. Missing source time
+  stays unknown even when local collection is recent
+- Last recorded failure is separate from the latest successful observation. A
+  later successful observation does not erase that failure;
+  `atOrAfterLatestObservation` identifies whether it is at least as recent as the
+  observation. A retained value is not evidence that a more recent failed refresh
+  succeeded
+- Stored event, skill-evidence, response and import counts are local-store counts,
+  not account totals or unique successful tasks. Skill evidence may overlap event
+  records; do not add these counters into a single total
+- Capture/occurrence time bounds and unknown-time counts refer only to stored
+  evidence. A capture bound is not an occurrence bound. Missing timestamps remain
+  unknown; earliest/latest records do not prove continuous coverage between them
+- Historical coverage remains partial, including an empty store. A zero stored
+  count says there are no stored records of that kind, not that no historical use
+  occurred. No backfill, incremental daemon or complete-history guarantee is implied
+
+The projection also includes current capture pause, content-capture and retention
+settings labeled `scope: all_sources`. These are current global policy, not a
+history of when capture was enabled. `provenance.measurement: measured` means local
+stored counts/times; `estimated: false` is not a completeness or backend-freshness
+claim. Import warnings are bounded to 100 latest imports and 100 distinct safe
+codes; `warningCodesTruncated` marks potentially omitted warnings.
+
+The projection contains no individual event/session/turn/response identities,
+retained content, import fingerprints, credentials or database paths. Warnings and
+safe failure codes must remain visible in conversational answers. Source identity
+is still the user's namespace, not an authenticated account binding.
+
+`doctor [--db ABS [--source ID]] [--max-age-ms N]` is a local setup diagnostic,
+not part of the conversational Skill. Without a database it checks the running
+binary and embedded dashboard. With `--db`, it opens the selected existing store
+read-only; `--source` adds selected-source diagnostics. `--max-age-ms` requires a
+source. It returns JSON diagnostics and exits 1 if any check fails. It never creates
+or migrates a database, runs a subprocess, scans client configuration, reads
+credentials, makes network requests, installs integrations or repairs a problem.
+Checks not requested are `not_checked`. The overall status is `incomplete` when
+store/source checks were not selected, `failed` if a check fails, or `ready` when
+the selected setup checks pass. `incomplete` alone exits 0. `ready` means the local
+setup can be queried; it does not imply recent or complete collection. A passed
+diagnostic does not prove live account or actual client compatibility.
+
 ## Values and precision
 
 A metric cell has one of these states:
@@ -73,7 +131,13 @@ Account totals and imported response totals remain separate. No response field a
 
 SQLite uses prepared statements, bounded inputs/queries, explicit migrations, atomic imports and secure deletion of active database content. This is not forensic erasure of backups, snapshots or exports. Retention is an explicit operation with an all-source scope clearly disclosed.
 
-The dashboard binds only to loopback, validates Host/Origin and mutation requests, serves only embedded allowlisted assets, and never exposes arbitrary SQL or file paths. The plugin cannot collect, modify settings, delete records, or return stored bodies. Queries preserve provenance, freshness, missingness and imported coverage warnings.
+The dashboard binds only to loopback, validates Host/Origin and mutation requests, serves only embedded allowlisted assets, and never exposes arbitrary SQL or file paths.
+
+v0.2.0 does not change database schema 2; normal v0.1.0/v0.1.1 rollback-journal stores
+remain compatible. Conversational queries and selected-store doctor checks open
+existing supported stores read-only, without implicit creation or migration.
+
+The plugin cannot collect, modify settings, delete records, or return stored bodies. Queries preserve provenance, freshness, missingness and imported coverage warnings.
 
 ## Verification limits
 

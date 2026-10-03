@@ -6,6 +6,7 @@ Local usage evidence for AI workflows: a private loopback dashboard, Skill + loc
 
 ## What it can tell you
 
+- Whether a selected source has observed, missing or unsupported collection methods, stale collection times, retained failures, or only partial local evidence
 - Which service-reported account metrics and quota windows were actually returned, and when they were collected
 - What supported local hooks observed after setup, with explicit gaps and optional local content retention
 - What directly evidenced skill reads/injections and response-token records appear in explicitly supplied supported records
@@ -31,7 +32,7 @@ cargo build --locked --release -p usage-lens
 
 Open the printed `http://127.0.0.1:4319` address on the same computer. Demo records live in memory and are labeled. This command does not connect to your account or run a model. Stop the server with Ctrl+C.
 
-The dashboard supports English/中文, light/dark themes, source selection, activity filters, quota windows, skill evidence, local content details, and capture/retention controls. Its refresh control reads the local store; it does not silently launch an account collector.
+The dashboard supports English/中文, light/dark themes, source selection, activity filters, quota windows, skill evidence, collection health, local content details, and capture/retention controls. Its refresh control reads the local store; it does not silently launch an account collector.
 
 ## Use a persistent local store
 
@@ -53,6 +54,41 @@ usage-lens settings --db "$HOME/.usage-lens/usage.sqlite" --content true
 ```
 
 This affects subsequent accepted records. Enable it before importing if you need local content details. Reimporting an identical file is a no-op and does not backfill content after enabling capture or deleting content; use a new explicit source for a deliberate import with a different capture scope. Known secret patterns are redacted, but redaction is best-effort. Do not treat the database as free of sensitive information.
+
+## Check setup and collection health
+
+After verifying an installed binary, run its local setup diagnostic without a database:
+
+```sh
+usage-lens doctor
+```
+
+`doctor` prints JSON diagnostics for the running binary and embedded dashboard.
+Optionally point it at one existing store and source:
+
+```sh
+usage-lens doctor --db "$HOME/.usage-lens/usage.sqlite" --source local-records
+usage-lens health --db "$HOME/.usage-lens/usage.sqlite" \
+  --source local-records --max-age-ms 3600000
+```
+
+The selected-store checks open the existing database read-only; they do not create
+or migrate it. `doctor` exits with status 1 if a diagnostic check fails. Its optional
+`--max-age-ms` requires `--source`; `health` always requires an explicit source and
+supports the same freshness threshold. Use `health --demo --source SOURCE` only for
+an explicitly labeled synthetic demonstration, choosing `SOURCE` from `status --demo`.
+
+Health separates retained observations from unsupported or missing methods,
+collection age from source-reported `sourceAsOf`, and current collection state from
+retained past failures. Stored event, skill-evidence, response and import counts,
+capture/occurrence bounds and unknown-time counts describe only the selected local
+store. Empty evidence is not proof of zero historical use; coverage remains partial.
+
+Both commands are local checks. They do not scan configuration/transcript directories,
+start another process, contact the network, read credentials, install a client,
+collect data, or register a background service. `doctor` is a setup workflow outside
+the conversational Skill; `health` is an allowed aggregate query. See the
+[data contract](docs/data-contract.md#collection-health) for interpretation.
 
 ## Account metrics and quota
 
@@ -100,13 +136,14 @@ absolute database path, and source ID. Follow the concrete, permission-aware
 No MCP server or running dashboard is needed for queries.
 
 The [plugin package](plugin/usage-lens/README.md) contains the Skill, an inert plugin
-manifest, and optional examples. Its seven allowed commands are `status`, `overview`,
-`daily`, `quota`, `tools`, `skill-summary`, and `response-tokens`. For example, on a POSIX
+manifest, and optional examples. Its eight allowed commands are `status`, `overview`,
+`daily`, `quota`, `tools`, `skill-summary`, `response-tokens`, and `health`. For example, on a POSIX
 shell after replacing the placeholders:
 
 ```sh
 '/ABSOLUTE/usage-lens' status --db '/ABSOLUTE/usage.sqlite'
 '/ABSOLUTE/usage-lens' skill-summary --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
+'/ABSOLUTE/usage-lens' health --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE'
 ```
 
 Use the intended source from `status`; never guess a database or account binding.
@@ -116,8 +153,8 @@ does not install the Skill, change client settings, authenticate, or open a tunn
 `skill-summary` matches MCP `usage_skills` and supports source/freshness inputs,
 not date/model filters. The local `skills` evidence command is outside this
 conversational allowlist. The instruction-level allowlist is not an OS sandbox. Persisted queries open an
-existing schema-2 rollback-journal store read-only; normal v0.1.0 databases remain
-compatible. Queries fail rather than create or migrate a store.
+existing schema-2 rollback-journal store read-only; normal v0.1.0 and v0.1.1 databases remain
+compatible without migration in v0.2.0. Queries fail rather than create or migrate a store.
 
 ### Optional MCP
 
@@ -128,7 +165,7 @@ client supporting local stdio MCP. The process entry is:
 '/ABSOLUTE/usage-lens' mcp --db '/ABSOLUTE/usage.sqlite'
 ```
 
-The server's seven aggregate tools have no raw-content, SQL, arbitrary-file,
+The server's eight aggregate tools (including `usage_health`) have no raw-content, SQL, arbitrary-file,
 account-refresh, or deletion endpoints. The Skill does not auto-activate MCP or
 silently switch transports. Both CLI and MCP results leave the machine when shared
 with a remote assistant; use the local dashboard for retained content.

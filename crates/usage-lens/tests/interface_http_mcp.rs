@@ -57,6 +57,7 @@ async fn http_queries_mutations_and_exact_embedded_assets() {
         "/api/response-tokens?sourceId=demo&fromDate=2026-09-01&toDate=2026-10-02&model=demo-model-a",
         "/api/response-tokens/records?sourceId=demo&limit=1",
         "/api/overview?sourceId=demo",
+        "/api/health?sourceId=demo&maxAgeMs=0",
         "/api/quota?sourceId=demo&maxAgeMs=1",
         "/api/daily?sourceId=demo&fromDate=2026-09-01&toDate=2026-10-02",
         "/api/events?sourceId=demo&fromDate=2026-10-01&toDate=2026-10-02&eventType=tool_call&model=demo-model-a&limit=1",
@@ -289,7 +290,7 @@ fn mcp_exact_allowlist_aggregates_only_and_safe_failures() {
         )
         .unwrap();
     let tools = list["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 7);
+    assert_eq!(tools.len(), 8);
     for tool in tools {
         assert_eq!(tool["annotations"]["readOnlyHint"], true);
         assert_eq!(tool["inputSchema"]["additionalProperties"], false);
@@ -406,4 +407,55 @@ fn mcp_version_negotiation_and_integral_decimal_arguments_match_sdk() {
     assert!(result["result"]["isError"].is_null(), "{result}");
     let result=session.handle(&store,json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"usage_daily","arguments":{"sourceId":"demo"}}})).unwrap();
     assert_eq!(result["result"]["isError"], true);
+}
+
+#[tokio::test]
+async fn health_http_and_mcp_share_strict_source_scoped_projection() {
+    let store = demo();
+    let expected = store
+        .get_health(&json!({"sourceId":"demo","maxAgeMs":0}))
+        .unwrap();
+    let mut session = mcp::McpSession::default();
+    initialize(&mut session, &store);
+    let response = session.handle(&store, json!({"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"usage_health","arguments":{"sourceId":"demo","maxAgeMs":0}}})).unwrap();
+    let actual: Value =
+        serde_json::from_str(response["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(actual, expected);
+    for args in [
+        json!({}),
+        json!({"sourceId":"demo","path":"private"}),
+        json!({"sourceId":"demo","fromDate":"2026-10-02"}),
+        json!({"sourceId":"demo","maxAgeMs":2592000001u64}),
+    ] {
+        let response = session.handle(&store, json!({"jsonrpc":"2.0","id":43,"method":"tools/call","params":{"name":"usage_health","arguments":args}})).unwrap();
+        assert_eq!(response["result"]["isError"], true);
+    }
+    let app = http::router(store, 4319);
+    let (status, actual, _, _) = request(
+        app.clone(),
+        "/api/health?sourceId=demo&maxAgeMs=0",
+        "GET",
+        "",
+        &[],
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(actual, expected);
+    for path in [
+        "/api/health",
+        "/api/health?sourceId=missing",
+        "/api/health?sourceId=demo&sourceId=demo",
+        "/api/health?sourceId=demo&fromDate=2026-10-02",
+        "/api/health?sourceId=demo&maxAgeMs=2592000001",
+    ] {
+        assert_eq!(
+            request(app.clone(), path, "GET", "", &[]).await.0,
+            400,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        request(app, "/api/health", "POST", "{}", &MUTATION).await.0,
+        404
+    );
 }

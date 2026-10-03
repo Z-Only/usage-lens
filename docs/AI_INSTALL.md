@@ -20,14 +20,14 @@ Record a short install plan: exact version, repository, asset, installation dire
 
 Canonical repository: [Z-Only/usage-lens](https://github.com/Z-Only/usage-lens)
 
-Open [published releases](https://github.com/Z-Only/usage-lens/releases), read the chosen release notes, and pin the exact stable version. `0.1.1` below is an example, not a claim that the release already exists. If its assets have not been published, stop; never substitute GitHub's automatically generated source archives for an executable release.
+Open [published releases](https://github.com/Z-Only/usage-lens/releases), read the chosen release notes, and pin the exact stable version. `0.2.0` below is an example, not a claim that the release already exists. If its assets have not been published, stop; never substitute GitHub's automatically generated source archives for an executable release.
 
-| Detected system | CPU | Asset for version `0.1.1` |
+| Detected system | CPU | Asset for version `0.2.0` |
 | --- | --- | --- |
-| Linux x64 (static musl) | x86_64 | `usage-lens-0.1.1-linux-x64.tar.gz` |
-| macOS 11.0 deployment target; tested on 15 | arm64 / Apple Silicon | `usage-lens-0.1.1-macos-arm64.tar.gz` |
-| macOS 11.0 deployment target; tested on 15 | x86_64 / Intel | `usage-lens-0.1.1-macos-x64.tar.gz` |
-| Windows x64 | AMD64 | `usage-lens-0.1.1-windows-x64.tar.gz` |
+| Linux x64 (static musl) | x86_64 | `usage-lens-0.2.0-linux-x64.tar.gz` |
+| macOS 11.0 deployment target; tested on 15 | arm64 / Apple Silicon | `usage-lens-0.2.0-macos-arm64.tar.gz` |
+| macOS 11.0 deployment target; tested on 15 | x86_64 / Intel | `usage-lens-0.2.0-macos-x64.tar.gz` |
+| Windows x64 | AMD64 | `usage-lens-0.2.0-windows-x64.tar.gz` |
 
 The matching sidecar replaces `.tar.gz` with `.manifest.json`. Also download `SHA256SUMS` and `release.json` from **the same tag's release**. Assets include a native Rust executable, embedded Leptos UI, bundled SQLite, license, third-party license/notice bundles, documentation, and inert plugin examples. No Node, Bun, Rust, npm, compiler, or package installation is required on the user's computer. The Linux executable is statically linked with musl; it does not require a particular glibc version. Native OS/kernel compatibility still matters.
 
@@ -40,13 +40,13 @@ Windows builds use the static MSVC runtime. GitHub tests them on Windows Server 
 Use the browser or an ordinary HTTPS download tool. Never use `curl | sh`, run an installer fetched from another site, or install packages to make a checksum command work. Example URL pattern:
 
 ```text
-https://github.com/Z-Only/usage-lens/releases/download/v0.1.1/usage-lens-0.1.1-macos-arm64.tar.gz
+https://github.com/Z-Only/usage-lens/releases/download/v0.2.0/usage-lens-0.2.0-macos-arm64.tar.gz
 ```
 
 In a new temporary download directory, the following POSIX example downloads only public release files. Set `platform` from the table, and set `version` to the version the user selected:
 
 ```sh
-version=0.1.1
+version=0.2.0
 platform=macos-arm64
 asset="usage-lens-${version}-${platform}.tar.gz"
 manifest="usage-lens-${version}-${platform}.manifest.json"
@@ -75,17 +75,26 @@ Read the verified manifest as data. Require:
 
 List archive contents with `tar -tzf ASSET` and `tar -tvzf ASSET` (Windows: `tar.exe`). Every member must be a regular file inside the single expected `usage-lens-VERSION-PLATFORM/` directory. Reject absolute paths, `..`, links, devices, unexpected executables, databases, logs, credentials, or install scripts. Extract into a **new, empty user-owned directory**, never on top of an existing installation. Compare the internal `manifest.json` with the verified sidecar. Before execution, compare the extracted executable's SHA-256 to its `files` entry too (`shasum -a 256`, `sha256sum`, or `Get-FileHash`). Retain the checksums and manifest with the installation record.
 
-A convenient final directory is `~/.local/share/usage-lens/0.1.1/` on macOS/Linux or `%LOCALAPPDATA%\UsageLens\0.1.1\` on Windows. Do not require administrator access. Leave previous versions in their own directories. Do not edit PATH or add a startup service unless separately requested.
+A convenient final directory is `~/.local/share/usage-lens/0.2.0/` on macOS/Linux or `%LOCALAPPDATA%\UsageLens\0.2.0\` on Windows. Do not require administrator access. Leave previous versions in their own directories. Do not edit PATH or add a startup service unless separately requested.
 
-## 4. Verify the isolated synthetic demo
+## 4. Verify setup and the isolated synthetic demo
 
 From the extracted directory, run only these local commands first:
 
 ```sh
 ./usage-lens --help
+./usage-lens doctor
 ./usage-lens status --demo
 ./usage-lens serve --demo --port 4319
 ```
+
+`doctor` returns JSON and checks the running binary and embedded dashboard without
+opening a database. A failed check returns exit status 1. It does not scan local
+configuration, read credentials, launch Codex, use the network, install anything,
+or register background collection. With no selected store/source the overall
+status is `incomplete` and those checks are `not_checked`; this alone exits 0.
+This is a setup diagnostic, outside the
+conversational Skill. It does not establish actual client integration.
 
 On PowerShell replace `./usage-lens` with `& .\usage-lens.exe`. `--help` should show the selected version. `status --demo` should report synthetic sources, never the user's account. Visit the printed `http://127.0.0.1:4319` URL **on that same computer**, verify the dashboard and its synthetic labels, and optionally read `/api/status`. The demo uses an in-memory database; it does not launch Codex, log in, inspect account credentials, or run a model. Stop it with Ctrl+C. If the port is in use, choose another local port or `--port 0` and use the printed URL.
 
@@ -102,6 +111,24 @@ Explain the intended absolute database path, what will be retained, and which op
 ```
 
 Use the platform's quoting rules; do not literally use the example path. A persistent source starts empty. Data appears only after a separately authorized import, hook, or collector. Never fill an empty real view with demo data.
+
+For an already configured store, optional diagnostics and health reads use only the
+exact database/source selected by the user:
+
+```sh
+./usage-lens doctor --db '/absolute/private/path/usage.sqlite' --source 'local-records'
+./usage-lens health --db '/absolute/private/path/usage.sqlite' --source 'local-records'
+```
+
+`doctor --db ABS` checks an existing database read-only, without creating or migrating
+it. Add `--source ID` to check that source; `--max-age-ms N` is permitted only with
+`--source`. `health` requires `--source` and accepts optional `--max-age-ms`. A
+successful health query can still report stale, missing or unsupported observations
+and retained failures; command success does not establish complete collection.
+`doctor` status `ready` means selected setup checks passed, not that collection is
+fresh or historically complete. Check [health semantics](data-contract.md#collection-health)
+before interpreting counts or timestamps. Invalid explicit input or an incompatible
+store remains an error, not permission to repair or collect.
 
 - **Imports:** have the user select a specific compatible file. Do not scan protected transcript directories or follow file paths found inside a record. See [record import](record-import.md). Do not copy private records into the install directory, support tickets, CI, or this repository
 - **Collector:** explain that it launches the user's installed Codex app-server and can initialize configured integrations, access existing authentication, and contact provider services. Get specific approval before running `collect --accept-startup-risk`. Do not log in or access authentication as a side effect of installation; do not copy, print, upload, or retain secrets
@@ -131,7 +158,7 @@ to the chosen Skill directory. Replace `install_root` with the actual extracted
 release directory. This POSIX example refuses to overwrite an existing Skill:
 
 ```sh
-install_root='/ABSOLUTE/usage-lens-0.1.1'
+install_root='/ABSOLUTE/usage-lens-0.2.0'
 skills_root="$HOME/.agents/skills"
 destination="$skills_root/usage-summary"
 if [ -e "$destination" ] || [ -L "$destination" ]; then
@@ -145,7 +172,7 @@ Equivalent Windows PowerShell (no administrator permissions):
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$installRoot = 'C:\ABSOLUTE\usage-lens-0.1.1'
+$installRoot = 'C:\ABSOLUTE\usage-lens-0.2.0'
 $skillsRoot = Join-Path $HOME '.agents\skills'
 $destination = Join-Path $skillsRoot 'usage-summary'
 if (Test-Path -LiteralPath $destination) { throw 'Skill already exists; review an explicit upgrade before replacing it.' }
@@ -181,21 +208,23 @@ directory. If the user wants the configuration retained in their local Skill cop
 review that exact local edit separately; never publish their paths or records.
 
 The Skill begins with `status`, then permits only `overview`, `daily`, `quota`,
-`tools`, `skill-summary`, and `response-tokens`. Prefer process argument vectors; otherwise
+`tools`, `skill-summary`, `response-tokens`, and `health`. Prefer process argument vectors; otherwise
 use correct OS/shell quoting as shown in the [package guide](../plugin/usage-lens/README.md).
 Queries do not need a running dashboard, collector, or MCP server. Missing data is
 reported as missing; it does not authorize collection, source creation, content
 capture, or a demo fallback. The Skill's instruction allowlist is not an OS sandbox.
 `skill-summary` returns the same aggregate projection as MCP `usage_skills` and
 supports only `--source` and optional `--max-age-ms` besides the store/demo flags.
-It does not support weekly/date/model skill summaries. The local `skills` evidence
+It does not support weekly/date/model skill summaries. `health` returns selected-source collection and local-evidence aggregates, matching
+MCP `usage_health`; it has source/freshness inputs, not date/model filters. `doctor`
+is a separate setup diagnostic and is outside the Skill. The local `skills` evidence
 command is explicitly outside the conversational allowlist; never use it as a
 fallback or send its individual event/session/turn records to an assistant.
 
-Persisted queries in v0.1.1 open the existing database read-only. They require
+Persisted queries in v0.2.0 open the existing database read-only. They require
 schema 2 and rollback-journal mode; normal v0.1.0 stores remain compatible without
-migration. A missing/unreadable/invalid store or an externally WAL-converted store
-returns `storage_error`; schema 0/1 or a future version returns `unsupported_schema`.
+migration, as do v0.1.1 stores. v0.2.0 adds no database migration. A missing, unreadable
+or invalid store, or an externally WAL-converted store, returns `storage_error`; schema 0/1 or a future version returns `unsupported_schema`.
 The errors intentionally omit private paths and contents. Do not infer a specific
 cause from `storage_error`, and do not run a migration, SQLite/PRAGMA command, or
 writable setup to make a query succeed. Any repair/upgrade is a separate reviewed
@@ -229,7 +258,7 @@ in a client supporting local stdio MCP. The native process is
 `/absolute/install/path/usage-lens mcp --db /absolute/private/path/usage.sqlite`
 (Windows uses `.exe`); `command` and `args` are separate process arguments.
 
-The seven aggregate tools remain available, but the Skill does not start,
+The eight aggregate tools, including `usage_health`, remain available, but the Skill does not start,
 auto-activate, or silently fall back to them. No connector, tunnel, daemon, hook,
 or collector is registered by the package manifest. MCP shares returned aggregates
 with the assistant provider just as CLI queries do; it does not make collection or

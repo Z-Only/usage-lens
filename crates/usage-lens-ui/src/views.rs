@@ -376,6 +376,8 @@ pub fn content(s: &State, ui: Ui) -> AnyView {
         } else {
             ().into_any()
         }}
+        {(!s.source.is_empty() && matches!(s.page, Page::Overview | Page::Settings))
+            .then(|| collection_health(s, ui))}
         {(s.page == Page::Overview && !overview.is_null()).then(|| source_details(s))}
         {(!warnings.is_empty())
             .then(|| {
@@ -486,6 +488,133 @@ pub fn overview_view(s: &State, ui: Ui) -> AnyView {
         </section>
     }
     .into_any()
+}
+pub fn collection_health(s: &State, ui: Ui) -> AnyView {
+    let l = s.language;
+    let health = s.data(Slot::Health);
+    let loading = s.loading(Slot::Health) || s.loading(Slot::Status);
+    let error = s.error(Slot::Health).to_owned();
+    view! {
+        <section class="panel health-panel" aria-labelledby="collection-health-title" aria-busy=loading.to_string()>
+            <div class="section-heading">
+                <h2 id="collection-health-title">{l.text("Collection health & coverage", "采集健康与覆盖")}</h2>
+                <Button ui action=Action::Load(Slot::Health, false)
+                    text=l.text("Retry health", "重试健康检查") class="text-button" disabled=loading />
+            </div>
+            <p class="footnote">
+                {l.text("Selected source · Stored records only. No live account access check. Unknown never means complete or zero usage.",
+                    "所选来源 · 仅限已存储记录。未检查实时账户访问。未知不代表完整，也不代表零用量。")}
+            </p>
+            {loading.then(|| view! {
+                <p class="loading-state" role="status">{l.text("Reading collection health…", "正在读取采集健康状态…")}</p>
+            })}
+            {(!error.is_empty()).then(|| view! {
+                <div class="notice error" role="alert">
+                    <strong>{l.text("Could not read collection health.", "无法读取采集健康状态。")}</strong>
+                    {error}
+                    {(!health.is_null()).then_some(l.text("Showing the previous health response; it may be out of date.", "正在显示上次健康响应；其状态可能已过时。"))}
+                </div>
+            })}
+            {if health.is_null() {
+                view! { <p class="health-empty">{l.text("Collection health is unknown until a response is available.", "收到响应之前，采集健康状态未知。")}</p> }.into_any()
+            } else {
+                view! {
+                    <div class="health-summary">
+                        <p><strong>{l.text("Capture setting · All sources", "采集设置 · 所有来源")}</strong>": "
+                            {match health["settings"]["capturePaused"].as_bool() {
+                                Some(true) => l.text("Paused", "已暂停"),
+                                Some(false) => l.text("Not paused", "未暂停"),
+                                None => l.text("Unknown", "未知"),
+                            }}
+                        </p>
+                        <p>{l.text("Local health read at", "本地健康读取时间")}": "
+                            <span class="mono">{health_timestamp(&health["checkedAt"], l)}</span>
+                        </p>
+                        <p class="footnote">{l.text("Not paused does not confirm that a collector is running. Pausing leaves existing records available.", "未暂停不代表采集器正在运行。暂停后，现有记录仍可查看。")}</p>
+                    </div>
+                    <p class="footnote">{l.text("Capture age threshold (milliseconds)", "采集时效阈值（毫秒）")}": "{display_value(&health["maxAgeMs"], l)}
+                        " · "{l.text("Based on collection time, not source freshness", "基于采集时间，不代表来源数据时效")}
+                    </p>
+                    <div class="health-methods">
+                        {rows(&health["observations"]).iter().map(|observation| health_method(observation, l)).collect_view()}
+                    </div>
+                    <h3>{l.text("Retained evidence counts", "保留证据数量")}</h3>
+                    <div class="health-counts">
+                        {[
+                            ("events", l.text("Events", "事件"), "lastCapturedAt"),
+                            ("skills", l.text("Skill evidence", "技能证据"), "lastCapturedAt"),
+                            ("responseTokens", l.text("Response token records", "响应 Token 记录"), "lastCapturedAt"),
+                            ("imports", l.text("Imports", "导入"), "lastImportedAt"),
+                        ].into_iter().map(|(key, title, timestamp)| {
+                            let record = &health["stored"][key];
+                            view! {
+                                <div class="health-count">
+                                    <h4>{title}</h4>
+                                    <strong>{health_count(&record["count"], l)}</strong>
+                                    <p>{l.text("Latest recorded capture / import", "最近记录的采集 / 导入时间")}": "
+                                        <span class="mono">{health_timestamp(&record[timestamp], l)}</span>
+                                    </p>
+                                    {(key != "imports").then(|| view! {
+                                        <p>{l.text("Occurrence time unknown", "发生时间未知")}": "{health_count(&record["unknownOccurredAtCount"], l)}</p>
+                                    })}
+                                </div>
+                            }
+                        }).collect_view()}
+                    </div>
+                    <p class="footnote">{l.text("Counts describe retained records, not unique executions or total usage. Skill records can overlap events; these counts must not be added together. Zero records does not prove zero historical usage.", "数量仅描述保留记录，不代表唯一执行次数或总用量。技能记录可能与事件重叠；这些数量不可相加。零记录不能证明历史用量为零。")}</p>
+                    <div class="health-gaps">
+                        <strong>{l.text("Historical coverage remains partial", "历史覆盖仍不完整")}</strong>
+                        <p>{l.text("Missing records: Unknown · History before collection: Unknown", "缺失记录：未知 · 采集之前的历史：未知")}</p>
+                        <p class="footnote">{l.text("Recent capture timestamps describe when records were retained here, not whether the underlying source is current or complete.", "近期采集时间仅说明记录何时被保留，不能证明底层来源是最新或完整的。")}</p>
+                    </div>
+                    {(!rows(&health["warnings"]).is_empty()).then(|| view! {
+                        <details class="source-warnings">
+                            <summary>{l.text("Collection health notes", "采集健康说明")}</summary>
+                            <ul>{rows(&health["warnings"]).iter().map(|warning| view! { <li>{string(warning).to_owned()}</li> }).collect_view()}</ul>
+                        </details>
+                    })}
+                }.into_any()
+            }}
+        </section>
+    }.into_any()
+}
+pub fn health_method(observation: &Value, l: Language) -> AnyView {
+    let freshness = &observation["freshness"];
+    let failure = &observation["lastFailure"];
+    view! {
+        <div class="health-method">
+            <h3 class="mono">{string(&observation["method"]).to_owned()}</h3>
+            <dl>
+                <dt>{l.text("Stored snapshot", "已存储快照")}</dt>
+                <dd>{health_state_text(&observation["availability"], l)}</dd>
+                <dt>{l.text("Recorded capability", "已记录能力")}</dt>
+                <dd>{health_state_text(&observation["capability"], l)}</dd>
+                <dt>{l.text("Capture freshness", "采集时效")}</dt>
+                <dd class=if ["stale", "future"].contains(&string(&freshness["state"])) { "health-warning" } else { "" }>
+                    {health_state_text(&freshness["state"], l)}
+                </dd>
+                <dt>{l.text("Latest snapshot capture", "最近快照采集")}</dt>
+                <dd class="mono">{health_timestamp(&freshness["observedAt"], l)}</dd>
+                <dt>{l.text("Source as of", "来源数据截至")}</dt>
+                <dd class="mono">{health_timestamp(&freshness["sourceAsOf"], l)}</dd>
+            </dl>
+            {(freshness["state"] == "future").then(|| view! {
+                <p class="footnote">{l.text("Capture is ahead of the local clock; freshness cannot be treated as current.", "采集时间晚于本地时钟；不可将其视为最新状态。")}</p>
+            })}
+            {(!failure.is_null()).then(|| view! {
+                <div class="health-failure">
+                    <strong>{l.text("Last recorded error", "最近记录的错误")}</strong>
+                    <p>{health_timestamp(&failure["errorCode"], l)}" · "{health_state_text(&failure["state"], l)}</p>
+                    <p class="mono">{health_timestamp(&failure["attemptedAt"], l)}</p>
+                    <p>{match failure["atOrAfterLatestObservation"].as_bool() {
+                        Some(false) => l.text("Earlier than the retained snapshot", "早于保留的快照"),
+                        Some(true) => l.text("At or after the retained snapshot, if any", "等于或晚于保留的快照（如有）"),
+                        None => l.text("Relation to retained snapshot: Unknown", "与保留快照的先后关系：未知"),
+                    }}</p>
+                </div>
+            })}
+        </div>
+    }.into_any()
 }
 pub fn chart(s: &State, ui: Ui) -> AnyView {
     let l = s.language;

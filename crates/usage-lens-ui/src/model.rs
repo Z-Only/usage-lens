@@ -85,6 +85,7 @@ impl Page {
 pub enum Slot {
     Status,
     Overview,
+    Health,
     Recent,
     Activity,
     Skills,
@@ -275,6 +276,7 @@ impl State {
         let (endpoint, mut query) = match slot {
             Slot::Status => ("status", vec![]),
             Slot::Overview => ("overview", vec![]),
+            Slot::Health => ("health", vec![("maxAgeMs", "900000".into())]),
             Slot::Recent => ("events", vec![("limit", "3".into())]),
             Slot::Activity => (
                 "events",
@@ -565,6 +567,7 @@ impl State {
                 let mut next = vec![
                     self.request(Slot::Overview, false),
                     self.request(Slot::Recent, false),
+                    self.request(Slot::Health, false),
                 ];
                 next.extend(self.load_page());
                 next
@@ -637,6 +640,35 @@ pub fn display_value(value: &Value, l: Language) -> String {
     } else {
         value.to_string()
     }
+}
+/// Health is a view of stored evidence, never a live access or completeness check.
+pub fn health_state_text(value: &Value, l: Language) -> &'static str {
+    match string(value) {
+        "available" => l.text("Available", "可用"),
+        "missing" => l.text("Missing", "缺失"),
+        "observed" => l.text("Observed", "已观测"),
+        "unsupported" => l.text("Unsupported", "不支持"),
+        "fresh" => l.text("Within age threshold", "在时效阈值内"),
+        "stale" => l.text("Stale", "已过期"),
+        "future" => l.text("Future timestamp", "未来时间戳"),
+        "recent" => l.text("Recent", "近期"),
+        _ => l.text("Unknown", "未知"),
+    }
+}
+pub fn health_count(value: &Value, l: Language) -> String {
+    let count = integer(value);
+    if count == "—" {
+        l.text("Unknown", "未知").into()
+    } else {
+        count
+    }
+}
+pub fn health_timestamp(value: &Value, l: Language) -> String {
+    value
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(l.text("Unknown", "未知"))
+        .into()
 }
 pub fn api_path(endpoint: &str, query: &[(&str, String)]) -> String {
     let pairs = query

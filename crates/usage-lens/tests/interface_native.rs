@@ -58,7 +58,7 @@ fn executable_help_status_mcp_and_exit_codes() {
         .map(|l| serde_json::from_str(l).unwrap())
         .collect();
     assert_eq!(responses.len(), 3);
-    assert_eq!(responses[1]["result"]["tools"].as_array().unwrap().len(), 7);
+    assert_eq!(responses[1]["result"]["tools"].as_array().unwrap().len(), 8);
     assert!(
         responses[2]["result"]["content"][0]["text"]
             .as_str()
