@@ -74,6 +74,8 @@ test("aggregate drilldown opens escaped local message and tool reading with hone
   await expect(page.locator(".token-period")).toContainText("这些响应 Token 未记录此信息");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("token-period-zh-dark.png"), fullPage: true });
+  await page.getByRole("navigation", { name: "主导航" }).getByRole("button", { name: "活动", exact: true }).click();
+  await expect(page.getByLabel("事件类型", { exact: true })).toHaveValue("tool_call");
   expect(errors).toEqual([]);
   expect(external).toEqual([]);
 });

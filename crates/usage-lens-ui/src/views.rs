@@ -1092,8 +1092,9 @@ pub fn activity(s: &State, ui: Ui) -> AnyView {
                     />
                 </label>
                 <label>
-                    {l.text("Event type", "事件类型")}
+                    <span id="activity-event-type-label">{l.text("Event type", "事件类型")}</span>
                     <select
+                        aria-labelledby="activity-event-type-label"
                         name="eventType"
                         prop:value=s.filters.event_type.clone()
                         on:change=event_bridge::value(ui, InputAction::Filter("eventType"))

@@ -986,3 +986,21 @@ fn aggregate_model_truncation_does_not_hide_the_separate_unknown_count() {
     assert!(activity_groups(&events, "byType").is_empty());
     assert!(activity_groups(&Value::Null, "byModel").is_empty());
 }
+
+#[test]
+fn event_type_filter_names_only_its_visible_bilingual_label() {
+    for language in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.page = Page::Activity;
+        s.language = language;
+        s.filters.event_type = "user_prompt".into();
+        let html = render(s);
+        let label = format!(
+            "<span id=\"activity-event-type-label\">{}</span>",
+            language.text("Event type", "事件类型")
+        );
+        assert!(html.contains(&label));
+        assert!(html.contains("aria-labelledby=\"activity-event-type-label\""));
+        assert!(html.contains("value=\"user_prompt\" selected"));
+    }
+}
