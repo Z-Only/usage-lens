@@ -308,6 +308,13 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
                 ),
             ),
             (
+                "/api/skill-summary",
+                (
+                    &["sourceId", "maxAgeMs", "fromDate", "toDate", "skillName"][..],
+                    &["sourceId"][..],
+                ),
+            ),
+            (
                 "/api/skills",
                 (
                     &[
@@ -355,6 +362,7 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
             "/api/events/detail" => store.get_local_event_detail(&input),
             "/api/events" => store.get_events(&input),
             "/api/skills" => store.get_skill_evidence(&input),
+            "/api/skill-summary" => store.get_skill_summary(&input),
             "/api/tools" => store.get_tool_usage(&input),
             "/api/response-tokens" => store.get_response_token_usage(&input),
             _ => store.get_response_token_records(&input),

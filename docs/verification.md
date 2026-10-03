@@ -114,3 +114,68 @@ full-page screenshots, attaches successful offscreen skip-link geometry, and add
 an isolated keyboard Tab/Enter check for visible focus and navigation to main
 content. Application CSS is unchanged. The follow-up's actual browser execution
 and corrected screenshot review remain requirements of its exact-commit CI.
+
+
+## v0.3.0 skill-evidence-trends validation scope
+
+The historical results above remain tied to their original checkpoints. The new
+regression scope and local validation checkpoint are recorded below. Version
+metadata and documentation alone do not establish rendered UI, packaged artifact
+or publication status.
+
+The regression scope is CLI/MCP/HTTP parity for paired valid dates, UTC boundary
+normalization, exact skill filtering and skill-only summaries; one missing date,
+invalid/reversed/over-366-day ranges and malformed freshness inputs must fail.
+No date/skill filters must preserve the previous aggregate JSON shape and the
+conversational allowlists must remain exactly eight commands/tools. A date-only
+query includes all skill names; a skill-only query includes undated matching
+evidence in totals and omits `daily`.
+
+Fixtures must cover known and unknown `occurredAt`, capture-time/occurrence-time
+mismatch, empty sources, missing days, overlapping loaded evidence, exact decimal
+counts, more than 500 skill groups with totals unaffected by truncation, and
+source-level import warnings with bounded/truncated inspection. Assertions must
+verify the distinct dated/all-retained/unknown/import-warning scopes and exclude
+content canaries and individual record/correlation IDs. Existing read-only,
+no-create/no-migrate, rollback-journal, source isolation and safe-error guarantees
+remain applicable.
+
+New Skills-panel English/Chinese, light/dark, 1440/390/320px, shared-date filtering,
+empty/partial/unknown evidence, stale source/date response handling and
+failure/retry behavior require actual browser execution and screenshot review for
+the final commit. Native renders alone do not establish that browser behavior.
+Extracted release smoke must exercise the new filtered aggregates while retaining
+all eight MCP tools and the existing setup/health checks.
+
+No live account, personal transcript, real-client installation, background daemon
+or incremental collection is verified by these synthetic requirements. Production
+coverage gates, cross-platform runtime and final extracted release artifacts must
+be checked separately before publication; no old release binary is updated in place.
+
+
+### v0.3.0 local pre-publication checkpoint
+
+The frozen-input local gate on 2026-10-03 passed 218 Rust tests, 64 Python
+build/gate/plugin tests, formatting, static checks, native/WASM Clippy and fresh
+Leptos/native builds. Production line coverage was 6635/6966 (95.2483%); changed
+executable coverage against `18ba84120690e7ee47845e7de85960d2779c28d4` was
+280/283 (98.9399%). The existing 216 browser-bridge lines remain conservatively
+uncovered; no runtime source records are missing. Hashes of all tracked and new
+non-ignored inputs stayed unchanged during the gate.
+
+Separately, all 38 synthetic release-tool tests, official JavaScript MCP SDK
+compatibility, E2E TypeScript checking and whitespace checks passed. The updated
+release smoke passed against the freshly built debug executable, including
+filtered CLI/HTTP/MCP skill aggregates, invalid ranges and read-only database
+invariants. This was not an extracted release package or cross-platform check.
+Review found and fixed one exact-name parity edge case: `--skill` now consumes
+leading-`--` names literally, with a CLI/MCP/HTTP regression.
+
+The nine new Playwright cases were authored and discovered across the configured
+desktop/390/320px projects (21 cases total), but were not executed locally. The
+known official Chromium-download extraction failure was not bypassed or retried
+through another host. English/light and Chinese/dark screenshot paths assert zero
+scroll, record offscreen unfocused skip-link geometry, and attach full-page images
+when CI executes them. Actual browser results/pixel review, all four platform
+runtime jobs, extracted-package verification and exact-commit remote gates remain
+required before publication. No v0.3.0 release has been published by this check.

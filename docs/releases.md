@@ -13,6 +13,32 @@ Usage Lens follows [Semantic Versioning](https://semver.org/). The initial publi
 
 The publishing pipeline currently accepts stable `vMAJOR.MINOR.PATCH` tags only, with no leading zeros. Prerelease/build-metadata tags require a reviewed workflow change first. All source, workflow, version, and changelog changes go through a PR and the required tests.
 
+## v0.3.0 skill-evidence-trend compatibility
+
+This minor release adds bounded occurrence-time skill trends and exact skill-name
+filtering to existing aggregate queries, plus the matching loopback route and
+Skills panel. It keeps the unfiltered response shape and eight query commands/MCP
+tools unchanged. The date range is paired, inclusive UTC and at most 366 days;
+only known `occurredAt` values contribute to dated totals and daily rows. See the
+[complete contract](data-contract.md#skill-evidence-summaries-and-utc-trends) for
+undated evidence, partial coverage, source-level warnings and group truncation.
+
+Database schema remains 2. Normal v0.1.0, v0.1.1 and v0.2.0 rollback-journal stores
+remain compatible without migration. Binary rollback is schema-compatible because
+this feature changes no persisted data; older interfaces do not support its new
+filters or HTTP route. Keep the usual closed-store backup and side-by-side install.
+Stable adapter versions are independent of the product version and remain unchanged.
+
+There are no collector, importer, hook, retention or background-process changes.
+Incremental collection remains a separate future design requiring stable identities,
+checkpoints, retention interaction and a reviewed schema-3 plan. Evidence counts
+must not be advertised as success rates, unique executions or skill-token costs.
+
+Release metadata prepares v0.3.0; it does not establish publication or verification.
+Require a new complete gate, exact-head browser/cross-platform CI and extracted
+artifact smoke for all supported platforms. Preserve old release artifacts and tags.
+Historical verification notes remain tied to their recorded commits.
+
 ## v0.2.0 collection-health compatibility
 
 This minor release adds collection-health aggregates and local setup diagnostics;

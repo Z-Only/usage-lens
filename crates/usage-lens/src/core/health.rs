@@ -169,7 +169,7 @@ impl UsageStore {
         }))
     }
 
-    fn import_health(&self, id: &str) -> CoreResult<Value> {
+    pub(super) fn import_health(&self, id: &str) -> CoreResult<Value> {
         let (count, first, last): (i64, Option<String>, Option<String>) =
             safe(self.db()?.query_row(
                 "SELECT count(*),min(imported_at),max(imported_at) FROM imports WHERE source_id=?",

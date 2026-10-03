@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 pub const HELP: &str = concat!(
     "Usage Lens ",
     env!("CARGO_PKG_VERSION"),
-    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: doctor, health, status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, collect, hook, serve, mcp\nDoctor: [--db /absolute/existing.sqlite [--source ID [--max-age-ms N]]]\n  Read-only setup checks; no scanning, installation, startup, or collection.\nHealth: --source ID [--max-age-ms N]; source evidence and collection freshness only\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N]\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
+    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: doctor, health, status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, collect, hook, serve, mcp\nDoctor: [--db /absolute/existing.sqlite [--source ID [--max-age-ms N]]]\n  Read-only setup checks; no scanning, installation, startup, or collection.\nHealth: --source ID [--max-age-ms N]; source evidence and collection freshness only\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N] [--from YYYY-MM-DD --to YYYY-MM-DD] [--skill EXACT_NAME]\n  Skill trends use UTC occurrence dates, at most 366 inclusive days; missing days are unknown.\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
 );
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
@@ -36,7 +36,8 @@ pub fn parse_arguments(argv: &[String]) -> Result<Arguments, AdapterError> {
     let allowed: &[&str] = match command.as_str() {
         "status" | "mcp" => &[],
         "doctor" | "health" => &["source", "max-age-ms"],
-        "overview" | "quota" | "skill-summary" => &["source", "max-age-ms"],
+        "overview" | "quota" => &["source", "max-age-ms"],
+        "skill-summary" => &["source", "max-age-ms", "from", "to", "skill"],
         "daily" => &["source", "from", "to", "max-age-ms"],
         "response-tokens" | "tools" => &["source", "from", "to", "model"],
         "history" => &["source", "max-age-ms", "cursor", "limit"],
@@ -81,7 +82,8 @@ pub fn parse_arguments(argv: &[String]) -> Result<Arguments, AdapterError> {
         } else {
             let value = argv.get(index).ok_or(AdapterError("missing_argument"))?;
             index += 1;
-            if value.is_empty() || value.starts_with("--") || value.len() > 4096 {
+            if value.is_empty() || (value.starts_with("--") && key != "skill") || value.len() > 4096
+            {
                 return Err(AdapterError("missing_argument"));
             }
             value.clone()
@@ -485,6 +487,7 @@ async fn execute(
                         ("cursor", "cursor"),
                         ("event-type", "eventType"),
                         ("kind", "kind"),
+                        ("skill", "skillName"),
                     ] {
                         if let Some(value) = flags.get(flag) {
                             params[key] = json!(value);

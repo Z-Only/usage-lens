@@ -119,6 +119,109 @@ A successful initial `skills.read` requires the exact namespace/function and a s
 
 See [the precise pinned importer contract and examples](record-import.md).
 
+## Skill evidence summaries and UTC trends
+
+`skill-summary` (CLI), `usage_skills` (optional MCP), and local
+`GET /api/skill-summary` share one aggregate-only projection for a selected source.
+They do not expose individual event/session/turn/response IDs, raw content,
+credentials, database paths or import fingerprints. The CLI/Skill and MCP
+allowlists stay at eight commands/tools. The local `skills` evidence view is a
+separate surface and is never an aggregate-query fallback.
+
+### Inputs and compatibility
+
+- Source is required: CLI `--source`, MCP/HTTP `sourceId`
+- Optional date filters must be paired: CLI `--from` / `--to`, MCP/HTTP `fromDate` /
+  `toDate`. Values are valid `YYYY-MM-DD` calendar dates, ascending and inclusive,
+  with at most 366 days. A partial pair, explicit null, reversed range or wider
+  range is invalid
+- Optional exact skill-name filtering: CLI `--skill`, MCP/HTTP `skillName`. It is
+  not a substring, case-folded or model filter. The name must be nonempty, at most
+  256 UTF-16 code units, with no control characters. Omit an unused filter rather
+  than supplying null. A skill-only summary is supported. `--skill` consumes its
+  next argument literally, including names that begin with `--`; use normal shell
+  quoting so names containing spaces or shell metacharacters remain one argument
+- Optional `--max-age-ms` / `maxAgeMs` retains the existing integer validation,
+  0 through 2592000000 inclusive, default 900000. It is not an evidence-date filter
+  and does not make stored history complete or launch a refresh
+- With no date or skill filter, the original response shape remains unchanged:
+  `source`, `skills`, `coverage`, `warnings`. Passing only a freshness threshold
+  also preserves that shape. New fields are present only for filtered queries
+
+Example bounded CLI query against an explicitly selected existing store:
+
+```sh
+usage-lens skill-summary --db '/ABSOLUTE/usage.sqlite' --source 'SOURCE' \
+  --from '2026-09-27' --to '2026-10-03' --skill 'EXACT_NAME'
+```
+
+Equivalent MCP arguments are `sourceId: "SOURCE"`, `fromDate: "2026-09-27"`,
+`toDate: "2026-10-03"`, `skillName: "EXACT_NAME"`. HTTP uses the same names as
+query parameters. Omitting the skill name includes all skill evidence in that
+source. Omit both dates for an all-retained exact-skill summary, never to imply an
+unbounded daily trend.
+
+### Filtered response
+
+The original source/coverage/warning fields remain. The added fields are:
+
+- `fromDate`, `toDate`, `skillName`: supplied filters; each unsupplied field is null
+- `basis: "occurred_at_utc"`: only `occurredAt` assigns an evidence date
+- `totals`: exact decimal-string `requested`, `loaded`, `invoked` counts and
+  `loadedEvidence: {mainRead, instructionInjection, unknown}`, also decimal strings
+- `totalsScope: "dated_range"` with dates; only dated evidence inside the inclusive
+  UTC range contributes. With a skill-only filter the value is
+  `"all_retained_matching_evidence"`; totals include undated matching evidence
+- `skills`: the existing aggregate group shape (`kind`, `evidenceKind`, `name`,
+  decimal-string `count`), filtered to the same evidence scope as totals. At most
+  500 groups are returned, with `skillsTruncated` indicating omitted groups.
+  Totals cover all matching evidence, independently of the group limit
+- `daily`: present only with a date range, sorted by UTC `date`. Each row has
+  `date`, `requested`, `loaded`, `invoked`, and
+  `loadedEvidence: {mainRead, instructionInjection, unknown}`. Skill-only results
+  omit `daily`; `fromDate` and `toDate` are null
+- `unknownOccurredAtCount`: a decimal-string count of undated matching skill
+  evidence across **all retained** records for the source and optional exact
+  skill, regardless of the supplied date range
+- `unknownOccurredAtScope: "all_retained_source_matching_skill"`: this deliberately
+  differs from the dated totals scope. It is not a count of undated events known
+  to fall inside the range
+- `importWarnings: {scope: "all_retained_source", codes: [...], truncated: bool}`:
+  safe import-warning codes for the source, bounded to the latest 100 retained
+  imports and at most 100 distinct codes. The scope label identifies the source
+  population, while `truncated` discloses the bounded inspection; warnings are not
+  filtered to a date range or skill
+
+For example, the count object can be
+`{"requested":"2","loaded":"4","invoked":"1","loadedEvidence":{"mainRead":"2","instructionInjection":"1","unknown":"1"}}`.
+A daily row adds a `date` such as `"2026-10-03"` to that same shape. These are
+synthetic illustrative counts, never a fallback for missing data.
+
+### Evidence and time interpretation
+
+Valid occurrence instants are normalized into UTC days. Local capture time,
+import time, observation time and source account-usage calendar labels are never
+substituted for `occurredAt`. Undated records are excluded from date-filtered
+totals, groups and daily rows. Missing days are absent and mean unknown coverage;
+they must not be filled with zero. Zero category counts within an observed day
+mean no retained matching evidence in that category, not no historical use.
+
+Requested, loaded and invoked remain separate evidence categories. Loaded counts
+are broken down into source evidence kinds `main_read`, `instruction_injection`
+and unknown/unclassified, serialized as `mainRead`, `instructionInjection`, and
+`unknown`. These subtypes partition loaded evidence; do not add them again to
+loaded totals. A main read and an instruction injection may overlap in the same
+workflow, and imported/forked histories can overlap. No count proves task success,
+unique execution, complete use history or tokens attributable to a skill.
+
+Coverage stays partial even for an empty result. Coverage and import warnings are
+source-level context; filtering does not establish complete collection for the
+chosen window. Retention or deletion can reduce retained evidence without changing
+what historically happened. This query adds no collector, import, hook or retention
+behavior and makes no schema change. Incremental collection is explicitly deferred
+until stable identities, checkpoints, retention interaction and a schema-3 design
+are specified and independently reviewed.
+
 ## Per-response token records
 
 Supported `token_usage_record` inputs contain required source identity fields and per-response `usage`. Deduplication is by source/thread/session/response identity. Conflicting duplicates are rejected. The store keeps exact reported input, cached input, cache-write input, output, reasoning output and total quantities.
@@ -133,8 +236,8 @@ SQLite uses prepared statements, bounded inputs/queries, explicit migrations, at
 
 The dashboard binds only to loopback, validates Host/Origin and mutation requests, serves only embedded allowlisted assets, and never exposes arbitrary SQL or file paths.
 
-v0.2.0 does not change database schema 2; normal v0.1.0/v0.1.1 rollback-journal stores
-remain compatible. Conversational queries and selected-store doctor checks open
+v0.3.0 does not change database schema 2; normal v0.1.0/v0.1.1/v0.2.0
+rollback-journal stores remain compatible. Conversational queries and selected-store doctor checks open
 existing supported stores read-only, without implicit creation or migration.
 
 The plugin cannot collect, modify settings, delete records, or return stored bodies. Queries preserve provenance, freshness, missingness and imported coverage warnings.

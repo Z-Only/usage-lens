@@ -1527,3 +1527,21 @@ dialog { color: var(--text); }
 dialog::backdrop { background: #10182760; backdrop-filter: blur(2px); }
 dialog.event-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; height: 100dvh; max-height: 100dvh; max-width: 100%; border: 0; }
 dialog.confirm-dialog { max-height: calc(100dvh - 32px); overflow: auto; }
+.skill-trends { min-width: 0; }
+.skill-trends > .muted { font-size: 13px; }
+.skill-trend-scope { font-size: 12px; overflow-wrap: anywhere; }
+.skill-trend-scope span { display: block; margin-top: 6px; color: var(--muted); }
+.skill-trend-label { font-size: 13px; margin-top: 24px; }
+.skill-trend-table { width: 100%; min-width: 720px; text-align: left; font-size: 12px; }
+.skill-trend-table caption { text-align: left; color: var(--muted); padding: 12px 0; }
+.skill-trend-table th, .skill-trend-table td { padding: 12px; border-bottom: 1px solid var(--border); }
+.skill-trend-table thead th { font-weight: 500; color: var(--muted); }
+.skill-trend-table tbody th { white-space: nowrap; font-weight: 500; }
+.skill-trend-table td { font-variant-numeric: tabular-nums; }
+.skill-unknown-time { margin-top: 20px; }
+.skill-trends .notice { flex-wrap: wrap; }
+.skill-trends .notice small { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .skill-trends .filters .skill-name-filter { width: 100%; }
+  .skill-trend-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

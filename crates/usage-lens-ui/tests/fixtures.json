@@ -1028,5 +1028,64 @@
       "estimated": false
     },
     "warnings": []
+  },
+  "skillSummary": {
+    "source": {
+      "id": "demo",
+      "displayName": "Synthetic local demo",
+      "mode": "demo",
+      "provider": "synthetic",
+      "coverageDescription": "Synthetic fixtures only. Real client not tested.",
+      "accountBinding": "unverified_local_namespace",
+      "createdAt": "2026-10-02T00:00:00Z"
+    },
+    "fromDate": "2026-10-01",
+    "toDate": "2026-10-03",
+    "skillName": null,
+    "skills": [],
+    "skillsTruncated": false,
+    "daily": [
+      {
+        "date": "2026-10-01",
+        "requested": "9007199254740993123456",
+        "loaded": "3",
+        "invoked": "0",
+        "loadedEvidence": {
+          "mainRead": "1",
+          "instructionInjection": "2",
+          "unknown": "0"
+        }
+      },
+      {
+        "date": "2026-10-03",
+        "requested": "0",
+        "loaded": "1",
+        "invoked": "1",
+        "loadedEvidence": {
+          "mainRead": "0",
+          "instructionInjection": "0",
+          "unknown": "1"
+        }
+      }
+    ],
+    "totals": {
+      "requested": "9007199254740993123456",
+      "loaded": "4",
+      "invoked": "1",
+      "loadedEvidence": {
+        "mainRead": "1",
+        "instructionInjection": "2",
+        "unknown": "1"
+      }
+    },
+    "unknownOccurredAtCount": "7",
+    "unknownOccurredAtScope": "all_retained_source_matching_skill",
+    "coverage": {
+      "completeness": "partial",
+      "missingEvents": "unknown",
+      "preCollectionHistory": "unknown",
+      "tokenAttribution": "not_provided"
+    },
+    "warnings": []
   }
 }

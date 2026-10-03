@@ -83,6 +83,15 @@ try {
     assert.equal(health.stored[kind].count, '0');
     assert.deepEqual(ready.sourceHealth.stored[kind], health.stored[kind]);
   }
+  const trend = JSON.parse(run(['skill-summary', '--db', db, '--source', 'release-smoke', '--from', '2024-02-28', '--to', '2024-03-02', '--skill', 'synthetic-skill']));
+  assert.equal(trend.basis, 'occurred_at_utc');
+  assert.equal(trend.totalsScope, 'dated_range');
+  assert.equal(trend.unknownOccurredAtCount, '0');
+  assert.equal(trend.unknownOccurredAtScope, 'all_retained_source_matching_skill');
+  assert.deepEqual(trend.daily, []);
+  assert.deepEqual(trend.totals, {requested:'0', loaded:'0', invoked:'0', loadedEvidence:{mainRead:'0', instructionInjection:'0', unknown:'0'}});
+  assert.equal(trend.skillsTruncated, false);
+  run(['skill-summary', '--db', db, '--source', 'release-smoke', '--from', '2024-02-28'], 1);
   const wrongSource = JSON.parse(run(['doctor', '--db', db, '--source', 'missing-source'], 1));
   assert.equal(wrongSource.status, 'failed');
   assert.deepEqual(await readFile(db), beforeQuery.bytes, 'Read-only diagnostics changed database bytes');
@@ -97,6 +106,14 @@ try {
   assert.equal(response.status, 200);
   const status = await response.json();
   assert(status.sources.length > 0, 'HTTP demo has no synthetic sources');
+  const skillResponse = await fetch(`${url}/api/skill-summary?sourceId=demo&fromDate=2024-02-28&toDate=2024-03-02&skillName=spreadsheets`);
+  assert.equal(skillResponse.status, 200);
+  const skillSummary = await skillResponse.json();
+  assert.equal(skillSummary.source.id, 'demo');
+  assert.equal(skillSummary.basis, 'occurred_at_utc');
+  assert.equal(skillSummary.skillName, 'spreadsheets');
+  assert(Array.isArray(skillSummary.daily));
+  assert.equal((await fetch(`${url}/api/skill-summary?sourceId=demo&fromDate=2024-02-28`)).status, 400);
   const page = await fetch(url);
   assert.equal(page.status, 200);
   const html = await page.text();
@@ -167,9 +184,16 @@ try {
   assert.equal(aggregate.coverage.completeness, 'partial');
   assert.equal(aggregate.provenance.estimated, false);
   assert(Array.isArray(aggregate.observations));
+  const mcpSkills = await request('tools/call', { name: 'usage_skills', arguments: { sourceId: 'demo', fromDate:'2024-02-28', toDate:'2024-03-02', skillName:'spreadsheets' } });
+  assert(!mcpSkills.isError);
+  const mcpSkillSummary = JSON.parse(mcpSkills.content[0].text);
+  assert.deepEqual(mcpSkillSummary.totals, skillSummary.totals);
+  assert.deepEqual(mcpSkillSummary.daily, skillSummary.daily);
+  assert.equal(mcpSkillSummary.unknownOccurredAtScope, 'all_retained_source_matching_skill');
+  assert.equal((await request('tools/call', {name:'usage_skills', arguments:{sourceId:'demo',fromDate:'2024-01-01',toDate:'2025-01-01'}})).isError, true);
   lines.close();
   await stop(mcp);
-  console.log('Extracted native artifact passed SQLite persistence, read-only doctor/health, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
+  console.log('Extracted native artifact passed SQLite persistence, read-only doctor/health/skill trends, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
 } finally {
   clearTimeout(limit);
   await Promise.all([...children].map(stop));

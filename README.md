@@ -10,6 +10,7 @@ Local usage evidence for AI workflows: a private loopback dashboard, Skill + loc
 - Which service-reported account metrics and quota windows were actually returned, and when they were collected
 - What supported local hooks observed after setup, with explicit gaps and optional local content retention
 - What directly evidenced skill reads/injections and response-token records appear in explicitly supplied supported records
+- How requested, loaded and invoked skill evidence varies across a bounded UTC date range, with exact skill-name filtering and explicit undated-evidence gaps
 - Which model/tool/evidence categories occur in the collected records, without inventing complete account-wide coverage
 
 Account usage, imported response usage, and quota are different measurements. Usage Lens does not add them together, infer remaining tokens from a percentage, or allocate an entire turn's token usage to a skill.
@@ -32,7 +33,7 @@ cargo build --locked --release -p usage-lens
 
 Open the printed `http://127.0.0.1:4319` address on the same computer. Demo records live in memory and are labeled. This command does not connect to your account or run a model. Stop the server with Ctrl+C.
 
-The dashboard supports English/中文, light/dark themes, source selection, activity filters, quota windows, skill evidence, collection health, local content details, and capture/retention controls. Its refresh control reads the local store; it does not silently launch an account collector.
+The dashboard supports English/中文, light/dark themes, source selection, activity filters, quota windows, skill evidence, collection health, local content details, and capture/retention controls. The Skills view includes a daily evidence panel using the shared date filters; its UTC dates come only from recorded occurrence times. Its refresh control reads the local store; it does not silently launch an account collector.
 
 ## Use a persistent local store
 
@@ -150,11 +151,24 @@ Use the intended source from `status`; never guess a database or account binding
 The Skill only queries existing aggregates. Collection, imports, hooks, dashboard
 startup, and local content review remain separate workflows. Building this project
 does not install the Skill, change client settings, authenticate, or open a tunnel.
-`skill-summary` matches MCP `usage_skills` and supports source/freshness inputs,
-not date/model filters. The local `skills` evidence command is outside this
-conversational allowlist. The instruction-level allowlist is not an OS sandbox. Persisted queries open an
-existing schema-2 rollback-journal store read-only; normal v0.1.0 and v0.1.1 databases remain
-compatible without migration in v0.2.0. Queries fail rather than create or migrate a store.
+`skill-summary` matches MCP `usage_skills`. Add paired `--from YYYY-MM-DD` and
+`--to YYYY-MM-DD` for an inclusive UTC range of at most 366 days, and optionally
+`--skill 'EXACT_NAME'`; a skill-only filter is also supported. MCP uses `fromDate`,
+`toDate`, and `skillName`. With no date/skill filter the existing response is
+unchanged. Date trends use only `occurredAt`, exclude undated evidence, and report
+its count separately across all retained source/skill-matching records. Missing
+days remain unknown, not zero. Per-skill groups are bounded to 500 with an explicit
+truncation flag; totals are independent of that limit. See the
+[skill-summary contract](docs/data-contract.md#skill-evidence-summaries-and-utc-trends).
+No model, success, unique-execution, or per-skill token attribution is inferred.
+
+The local `skills` evidence command is outside this conversational allowlist.
+The instruction-level allowlist is not an OS sandbox. Persisted queries open an
+existing schema-2 rollback-journal store read-only; normal v0.1.0, v0.1.1 and v0.2.0
+databases remain compatible without migration in v0.3.0. Queries fail rather than
+create or migrate a store. Incremental collection is deferred until stable
+identities, checkpoints, retention interaction and a schema-3 design are defined;
+this feature changes no collectors and installs no background process.
 
 ### Optional MCP
 

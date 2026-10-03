@@ -238,9 +238,7 @@ async fn skill_summary_matches_mcp_aggregates_without_individual_evidence() {
 
 #[tokio::test]
 async fn skill_summary_rejects_raw_evidence_filters_and_unknown_sources() {
-    for flag in [
-        "--kind", "--from", "--to", "--model", "--limit", "--cursor", "--event",
-    ] {
+    for flag in ["--kind", "--model", "--limit", "--cursor", "--event"] {
         let args = ["skill-summary", "--demo", flag, "private"].map(String::from);
         let (code, out, err) = cli(&args).await;
         assert_eq!(code, 1, "{flag}");

@@ -25,6 +25,7 @@ fn full() -> State {
         (Slot::Recent, "events"),
         (Slot::Activity, "events"),
         (Slot::Skills, "skills"),
+        (Slot::SkillSummary, "skillSummary"),
         (Slot::History, "history"),
         (Slot::ResponseUsage, "responseUsage"),
         (Slot::ResponseRecords, "responseRecords"),
@@ -695,4 +696,104 @@ fn health_capture_setting_and_notes_are_safe_and_have_explicit_scope() {
             assert!(!html.contains("<img"));
         }
     }
+}
+
+#[test]
+fn daily_skill_trends_preserve_exact_counts_independent_states_and_missing_days() {
+    for language in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.page = Page::Skills;
+        s.language = language;
+        let h = render(s);
+        for text in [
+            "2026-10-01",
+            "2026-10-03",
+            "9,007,199,254,740,993,123,456",
+            "scope=\"row\"",
+            "scope=\"col\"",
+            "tabindex=\"0\"",
+            "skill-trend-totals",
+        ] {
+            assert!(h.contains(text), "missing {text}");
+        }
+        assert!(!h.contains("<th scope=\"row\">2026-10-02"));
+        let phrases = if language == Language::English {
+            [
+                "Daily skill evidence",
+                "Loaded · main read",
+                "Loaded · instruction injection",
+                "Loaded · unknown subtype",
+                "outside the dated totals",
+                "omitted days are unknown",
+                "All retained evidence below",
+            ]
+        } else {
+            [
+                "每日技能证据",
+                "加载 · 主文件读取",
+                "加载 · 指令注入",
+                "加载 · 未知子类型",
+                "不计入日期范围合计",
+                "未列出的日期为未知",
+                "下方为全部保留证据",
+            ]
+        };
+        for phrase in phrases {
+            assert!(h.contains(phrase), "missing {phrase}");
+        }
+        assert!(!h.contains("<canvas"));
+        assert!(!h.contains("success rate"));
+    }
+}
+#[test]
+fn daily_skill_trends_have_prompt_loading_validation_error_retry_and_empty_states() {
+    for language in [Language::English, Language::Chinese] {
+        let mut s = full();
+        s.language = language;
+        s.remotes.remove(&Slot::SkillSummary);
+        let h = render_with(s.clone(), skill_trends);
+        assert!(h.contains(language.text("Apply a date range", "应用日期范围")));
+        assert!(!h.contains("skill-trend-totals"));
+        s.remotes.entry(Slot::SkillSummary).or_default().loading = true;
+        let h = render_with(s.clone(), skill_trends);
+        assert!(h.contains("aria-busy=\"true\""));
+        assert!(h.contains(language.text("Loading local evidence", "正在加载本地证据")));
+        assert!(!h.contains(language.text("Apply a date range", "应用日期范围")));
+        for code in ["invalid_skill_date_range", "offline", "filter_mismatch"] {
+            s.remotes.get_mut(&Slot::SkillSummary).unwrap().error = code.into();
+            let h = render_with(s.clone(), skill_trends);
+            assert!(h.contains("role=\"alert\""));
+            assert!(h.contains(language.text("Retry", "重试")));
+            assert!(h.contains(if code == "invalid_skill_date_range" {
+                language.text("Choose a valid UTC date pair", "请选择有效的 UTC 起止日期")
+            } else {
+                language.text("Could not load daily evidence", "无法加载每日证据")
+            }));
+        }
+        let mut response = fixture("skillSummary");
+        response["daily"] = json!([]);
+        response["totals"] = Value::Null;
+        put(&mut s, Slot::SkillSummary, response);
+        let h = render_with(s, skill_trends);
+        assert!(h.contains(language.text(
+            "No dated evidence in this range",
+            "此范围内没有带日期的证据"
+        )));
+        assert!(h.contains("—"));
+        assert!(!h.contains("<table"));
+    }
+}
+#[test]
+fn daily_skill_trends_escape_exact_skill_warnings_and_show_truncation_without_fake_days() {
+    let mut s = full();
+    let response = &mut s.remotes.get_mut(&Slot::SkillSummary).unwrap().value;
+    response["skillName"] = json!("<img src=x onerror=alert(1)>");
+    response["warnings"] = json!(["<script>bad()</script>"]);
+    response["skillsTruncated"] = json!(true);
+    let h = render_with(s, skill_trends);
+    assert!(h.contains("&lt;img"));
+    assert!(h.contains("&lt;script&gt;"));
+    assert!(!h.contains("<script>"));
+    assert!(h.contains("limited to 500 entries"));
+    assert!(h.contains("daily totals include all matching evidence"));
 }

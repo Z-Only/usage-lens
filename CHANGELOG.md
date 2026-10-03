@@ -6,6 +6,27 @@ Releases group useful features and fixes. Merging a PR does not automatically cr
 
 Further changes will be grouped here until a meaningful release is ready.
 
+## [0.3.0] - 2026-10-03
+
+Skill-evidence-trends release preparation. A version entry does not publish a
+release; exact-commit checks and extracted-artifact verification are still required.
+
+### Added
+
+- Paired inclusive UTC date filters (at most 366 days) and optional exact skill-name filtering on aggregate-only `skill-summary` and optional MCP `usage_skills`; a skill-only summary is also supported
+- Local aggregate `GET /api/skill-summary`, sharing the same validated projection
+- Filtered requested/loaded/invoked totals, daily occurrence-time evidence, loaded main-read/instruction-injection/unknown subtypes, and at most 500 aggregate skill groups with explicit truncation
+- Explicit all-retained source/skill-matching unknown-occurrence counts and source-level partial-coverage/import-warning scopes; missing days remain unknown
+- English/Chinese Skills daily-evidence panel sharing the dashboard's date filters
+
+### Compatibility and verification
+
+- Unfiltered `skill-summary` / `usage_skills` response shape and the eight-command/tool conversational allowlists are unchanged; optional freshness validation remains supported
+- No database migration: schema-2 rollback-journal stores from v0.1.0, v0.1.1 and v0.2.0 remain compatible. Binary rollback remains schema-compatible; older versions do not support the new filters or HTTP route
+- Stable adapter identities are unchanged. This feature adds no collection, import, hook, retention or background-daemon behavior. Incremental collection is deferred until stable identities, checkpoints, retention interaction and a schema-3 design are defined
+- Only `occurredAt` assigns UTC dates. Unknown-time evidence is not assigned to a date range; counts do not imply task success, unique executions or per-skill token attribution
+- See [verification notes](docs/verification.md) for current checks and pending gates. Historical test results apply only to their named checkpoints; synthetic checks do not establish live-account or real-client integration
+
 ## [0.2.0] - 2026-10-03
 
 Collection-health release preparation. Downloadable artifacts exist only after the exact-commit checks and release workflow have passed and published them; a version entry is not evidence of publication.

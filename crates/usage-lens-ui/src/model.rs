@@ -89,6 +89,7 @@ pub enum Slot {
     Recent,
     Activity,
     Skills,
+    SkillSummary,
     History,
     ResponseUsage,
     ResponseRecords,
@@ -116,10 +117,22 @@ pub struct Filters {
     pub to: String,
     pub event_type: String,
     pub model: String,
+    pub skill_name: String,
 }
 impl Filters {
     pub fn valid(&self) -> bool {
         self.from.is_empty() || self.to.is_empty() || self.from <= self.to
+    }
+    pub fn skill_dates_valid(&self) -> bool {
+        let parse = |value: &str| {
+            NaiveDate::parse_from_str(value, "%Y-%m-%d")
+                .ok()
+                .filter(|date| date.format("%Y-%m-%d").to_string() == value)
+        };
+        match (parse(&self.from), parse(&self.to)) {
+            (Some(from), Some(to)) => (0..366).contains(&(to - from).num_days()),
+            _ => false,
+        }
     }
 }
 #[derive(Clone, Debug, PartialEq)]
@@ -292,6 +305,14 @@ impl State {
                 "skills",
                 vec![("kind", self.kind.clone()), ("limit", "100".into())],
             ),
+            Slot::SkillSummary => (
+                "skill-summary",
+                vec![
+                    ("fromDate", self.filters.from.clone()),
+                    ("toDate", self.filters.to.clone()),
+                    ("skillName", self.filters.skill_name.clone()),
+                ],
+            ),
             Slot::History => ("quota/history", vec![("limit", "20".into())]),
             Slot::ResponseUsage => ("response-tokens", vec![]),
             Slot::ResponseRecords => ("response-tokens/records", vec![("limit", "20".into())]),
@@ -329,7 +350,11 @@ impl State {
         if self.source.is_empty() {
             vec![]
         } else {
-            vec![self.request(slot, false)]
+            let mut requests = vec![self.request(slot, false)];
+            if self.page == Page::Skills && self.filters.skill_dates_valid() {
+                requests.push(self.request(Slot::SkillSummary, false));
+            }
+            requests
         }
     }
     pub fn dispatch(&mut self, action: Action) -> Vec<Request> {
@@ -368,6 +393,11 @@ impl State {
                 {
                     return vec![];
                 }
+                if slot == Slot::SkillSummary && !self.filters.skill_dates_valid() {
+                    self.invalidate(slot);
+                    self.remotes.entry(slot).or_default().error = "invalid_skill_date_range".into();
+                    return vec![];
+                }
                 vec![self.request(slot, more)]
             }
             Action::Select(event) => {
@@ -393,11 +423,18 @@ impl State {
                     "to" => self.filters.to = value,
                     "eventType" => self.filters.event_type = value,
                     "model" => self.filters.model = value,
+                    "skillName" => self.filters.skill_name = value,
                     _ => {}
+                }
+                if ["from", "to", "skillName"].contains(&field) {
+                    self.invalidate(Slot::SkillSummary);
                 }
                 vec![]
             }
             Action::ApplyFilters => {
+                if self.page == Page::Skills {
+                    return self.dispatch(Action::Load(Slot::SkillSummary, false));
+                }
                 if !self.filters.valid() {
                     self.remotes.entry(Slot::Activity).or_default().error =
                         "invalid_date_range".into();
@@ -408,7 +445,12 @@ impl State {
             }
             Action::ResetFilters => {
                 self.filters = Filters::default();
-                vec![self.request(Slot::Activity, false)]
+                self.invalidate(Slot::SkillSummary);
+                if self.page == Page::Skills {
+                    vec![]
+                } else {
+                    vec![self.request(Slot::Activity, false)]
+                }
             }
             Action::SkillKind(kind) => {
                 if !["requested", "loaded", "invoked"].contains(&kind.as_str()) {
@@ -526,6 +568,14 @@ impl State {
             };
             if response_source != request.source {
                 current.error = "source_mismatch".into();
+                return vec![];
+            }
+            if request.slot == Slot::SkillSummary
+                && (string(&value["fromDate"]) != self.filters.from
+                    || string(&value["toDate"]) != self.filters.to
+                    || string(&value["skillName"]) != self.filters.skill_name)
+            {
+                current.error = "filter_mismatch".into();
                 return vec![];
             }
             if request.slot == Slot::Detail
