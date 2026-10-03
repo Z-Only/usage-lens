@@ -3,6 +3,7 @@
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -143,14 +144,18 @@ class GitTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.git("init", "-q")
+        # Every fixture is a separate repository; checkout's config does not apply.
+        # Detached post-commit maintenance can otherwise race TemporaryDirectory cleanup.
+        self.git("config", "maintenance.auto", "false")
+        self.git("config", "gc.auto", "0")
         self.git("config", "user.email", "ci-test@example.invalid")
         self.git("config", "user.name", "Coverage Tests")
         self.write("README.md", "initial\n")
         self.commit()
         self.base = self.git("rev-parse", "HEAD").strip()
 
-    def git(self, *args):
-        return subprocess.run(["git", "-C", str(self.root), *args], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
+    def git(self, *args, env=None):
+        return subprocess.run(["git", "-C", str(self.root), *args], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env).stdout
 
     def write(self, name, text):
         path = self.root / name
@@ -163,6 +168,26 @@ class GitTests(unittest.TestCase):
 
     def changes(self, working_tree=False):
         return gate.changed_lines(self.root, self.base, None if working_tree else "HEAD")
+
+    def test_fixture_commits_do_not_start_automatic_maintenance(self):
+        self.assertEqual(self.git("config", "--get", "maintenance.auto").strip(), "false")
+        self.assertEqual(self.git("config", "--get", "gc.auto").strip(), "0")
+        trace = self.root / ".git" / "fixture-trace.json"
+        env = {**os.environ, "GIT_TRACE2_EVENT": str(trace)}
+        self.git("commit", "--allow-empty", "-qm", "isolated fixture", env=env)
+
+        def housekeeping_children():
+            records = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(any(record.get("event") == "start" for record in records))
+            return [record for record in records if record.get("event") == "child_start"
+                    and any(argument in ("maintenance", "gc") for argument in record.get("argv", []))]
+
+        self.assertEqual(housekeeping_children(), [])
+        # Positive control proves trace matching works, while explicitly staying synchronous.
+        trace.unlink()
+        self.git("-c", "maintenance.auto=true", "-c", "maintenance.autoDetach=false",
+                 "-c", "gc.autoDetach=false", "commit", "--allow-empty", "-qm", "trace control", env=env)
+        self.assertTrue(housekeeping_children())
 
     def test_added_source_counts_all_lines(self):
         self.write("src/ui/main.ts", "export const first = 1\nexport const second = 2\n")

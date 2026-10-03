@@ -27,6 +27,8 @@ pub enum CoreError {
     ResponseTokenConflict,
     ImportedSourceRequired,
     StorageError,
+    RolloutCheckpointConflict,
+    RolloutIdentityConflict,
 }
 
 impl CoreError {
@@ -43,6 +45,8 @@ impl CoreError {
             b"store_closed" => Self::StoreClosed,
             b"response_token_conflict" => Self::ResponseTokenConflict,
             b"imported_source_required" => Self::ImportedSourceRequired,
+            b"rollout_checkpoint_conflict" => Self::RolloutCheckpointConflict,
+            b"rollout_identity_conflict" => Self::RolloutIdentityConflict,
             _ => Self::StorageError,
         }
     }
@@ -60,6 +64,8 @@ impl CoreError {
             Self::ResponseTokenConflict => "response_token_conflict",
             Self::ImportedSourceRequired => "imported_source_required",
             Self::StorageError => "storage_error",
+            Self::RolloutCheckpointConflict => "rollout_checkpoint_conflict",
+            Self::RolloutIdentityConflict => "rollout_identity_conflict",
         }
     }
 }

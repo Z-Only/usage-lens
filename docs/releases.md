@@ -13,7 +13,46 @@ Usage Lens follows [Semantic Versioning](https://semver.org/). The initial publi
 
 The publishing pipeline currently accepts stable `vMAJOR.MINOR.PATCH` tags only, with no leading zeros. Prerelease/build-metadata tags require a reviewed workflow change first. All source, workflow, version, and changelog changes go through a PR and the required tests.
 
-## v0.3.0 skill-evidence-trend compatibility
+## v0.4.0 incremental-record-import compatibility
+
+This minor release adds a separately authorized one-shot incremental file import.
+It requires an absolute database/file path, source, logical stream ID and pinned
+source version on every call. It boundedly rereads/reparses the complete prefix,
+defers every unterminated tail, and atomically commits records, source-wide hashed
+replay identities and a compare-and-swap checkpoint. Truncation, changed committed
+prefixes and immutable identity conflicts reject the whole import. It installs no
+watcher, scheduler, discovery/glob collector or remembered-path reopen mechanism.
+Snapshot `import-rollout` and the eight-command/tool conversational boundary stay
+unchanged. Evidence does not establish skill invocation, success or token cost.
+
+**Stop writers and make a verified private backup before the first successful
+incremental import.** That explicit transaction upgrades schema 2 to schema 3;
+failed parsing/validation does not migrate. Ordinary writable opens/new stores
+remain schema 2. v0.4.0 queries/doctor support both schema 2 and 3 read-only without
+migration. **v0.3.0 and older cannot open schema 3.** Keep the old executable and
+verified pre-upgrade backup; rollback requires a separate compatible backup copy,
+not merely changing binaries. Do not downgrade or overwrite the current store.
+
+Retention and content-only deletion preserve replay metadata; explicit delete-all
+or source-scoped delete-all resets it. Already-deleted pre-upgrade history cannot
+be reconstructed. When switching snapshot/incremental modes, use separate sources
+if anonymous records may overlap. A copied byte-identical prefix can continue a
+logical stream but does not prove physical-file identity. Rotation requires an
+explicit new stream/source, and the existing bounded-file limits remain. See the
+[full import contract](record-import.md#incremental-one-shot-workflow).
+
+The incremental adapter has a separate versioned identity; unchanged adapter
+contracts retain their own version strings. Align owned package/plugin/lockfile
+versions only; never blanket-replace dependency versions or historical release
+notes. `scripts/check_static.py` checks the explicit owned-version inventory.
+
+Version preparation is not publication or a test result. Require the complete
+exact-head production gate, browser/cross-platform CI and extracted-artifact smoke
+on every supported target. The synthetic smoke covers schema-2 reads before
+upgrade, incremental append/no-op/truncation, and schema-3 read-only queries. It
+does not prove real-client/account integration or background collection.
+
+## Historical v0.3.0 skill-evidence-trend compatibility
 
 This minor release adds bounded occurrence-time skill trends and exact skill-name
 filtering to existing aggregate queries, plus the matching loopback route and
@@ -73,12 +112,12 @@ Each `.tar.gz` contains the native executable, embedded WebAssembly UI, bundled 
 
 The Linux executable uses static musl and is smoke-tested on Ubuntu 24.04; it does not require an installed glibc version. The build checks that it has no dynamic ELF interpreter. Older kernels, CentOS 7, and Alpine are not claimed supported without tests. macOS builds set `MACOSX_DEPLOYMENT_TARGET=11.0` for both architectures and verify the produced Mach-O minimum using `otool`. Rust officially supports ARM64 from 11.0 and x64 from an earlier baseline ([Rust target requirements](https://doc.rust-lang.org/rustc/platform-support/apple-darwin.html)). This broadens the compiler/linker target without claiming runtime verification on macOS 11–14: CI runs on macOS 15 only. Windows builds use the static MSVC runtime and are tested on Server 2025; other Windows variants remain unverified. No ARM Linux, ARM Windows, 32-bit, older-OS compatibility, OS notarization, or code-signing claim is made. SHA-256 verifies integrity, not a publisher signature.
 
-Every platform extracts its own archive to a new temporary directory outside the checkout and runs the native CLI including setup/health checks, SQLite create/reopen, synthetic demo HTTP and embedded UI, and MCP initialize/list/query smoke. The smoke creates only temporary synthetic data and an isolated home directory. No real account, installed Codex process, credentials, or user records are used.
+Every platform extracts its own archive to a new temporary directory outside the checkout and runs the native CLI including setup/health checks, SQLite create/reopen, read-only schema-2/3 checks, synthetic incremental append/no-op/truncation, synthetic demo HTTP and embedded UI, and MCP initialize/list/query smoke. The smoke creates only temporary synthetic data and an isolated home directory. No real account, installed Codex process, credentials, or user records are used.
 
 ## Prepare a release PR
 
 1. Decide the coherent release scope. Confirm functionality, regression fixes, documentation, and safety boundaries are ready together
-2. In one reviewed PR, align the native Cargo package version, frontend/tooling version metadata where present, and plugin manifest version. Add a dated `## [VERSION]` changelog section with actual features/fixes, limitations, and schema compatibility. Build output/MCP version must come from the native package version
+2. In one reviewed PR, align both owned Cargo package versions and their Cargo.lock entries, frontend/tooling package version, and plugin manifest version. Keep dependency versions unchanged unless separately reviewed. Add a dated `## [VERSION]` changelog section with actual features/fixes, limitations, and schema compatibility. Build output/MCP version must come from the native package version
 3. Require the production quality gates (at least 95% total and changed-line coverage) and `Release package checks / package-gate`. Packaging tests are separate from runtime coverage; they do not shrink or weaken its inventory
 4. Merge the PR through the normal review/ruleset process. Wait for **both workflows' push-to-main runs on the exact merged commit** to succeed. PR success alone is insufficient
 5. Check the source commit and release notes. Create the annotated stable tag only on that reviewed main-history commit, then push that tag. No tag is created automatically

@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 pub const HELP: &str = concat!(
     "Usage Lens ",
     env!("CARGO_PKG_VERSION"),
-    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: doctor, health, status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, collect, hook, serve, mcp\nDoctor: [--db /absolute/existing.sqlite [--source ID [--max-age-ms N]]]\n  Read-only setup checks; no scanning, installation, startup, or collection.\nHealth: --source ID [--max-age-ms N]; source evidence and collection freshness only\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N] [--from YYYY-MM-DD --to YYYY-MM-DD] [--skill EXACT_NAME]\n  Skill trends use UTC occurrence dates, at most 366 inclusive days; missing days are unknown.\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
+    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: doctor, health, status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, import-rollout-incremental, collect, hook, serve, mcp\nDoctor: [--db /absolute/existing.sqlite [--source ID [--max-age-ms N]]]\n  Read-only setup checks; no scanning, installation, startup, or collection.\nHealth: --source ID [--max-age-ms N]; source evidence and collection freshness only\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N] [--from YYYY-MM-DD --to YYYY-MM-DD] [--skill EXACT_NAME]\n  Skill trends use UTC occurrence dates, at most 366 inclusive days; missing days are unknown.\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nIncremental rollout: --source ID --file /absolute/file.jsonl --stream ID --source-version PINNED_COMMIT\n  One explicit bounded read; complete lines only, no watching. Back up schema-2 databases before upgrade.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
 );
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
@@ -58,6 +58,7 @@ pub fn parse_arguments(argv: &[String]) -> Result<Arguments, AdapterError> {
         "retention" => &["confirm"],
         "import" => &["source", "file"],
         "import-rollout" => &["source", "file", "source-version"],
+        "import-rollout-incremental" => &["source", "file", "stream", "source-version"],
         "collect" => &["source", "accept-startup-risk"],
         "hook" => &["source"],
         "serve" => &["host", "port"],
@@ -229,7 +230,16 @@ async fn execute(
     if demo && flags.contains_key("db") {
         return Err(AdapterError("demo_database_must_be_isolated"));
     }
-    if demo && ["collect", "hook", "source", "import", "import-rollout"].contains(&command.as_str())
+    if demo
+        && [
+            "collect",
+            "hook",
+            "source",
+            "import",
+            "import-rollout",
+            "import-rollout-incremental",
+        ]
+        .contains(&command.as_str())
     {
         return Err(AdapterError("demo_command_not_allowed"));
     }
@@ -399,7 +409,7 @@ async fn execute(
                 .or(if demo { Some("demo") } else { None })
                 .ok_or(AdapterError("missing_argument"))?;
             match command.as_str() {
-                "import" | "import-rollout" => {
+                "import" | "import-rollout" | "import-rollout-incremental" => {
                     let filename = required(&flags, "file")?;
                     if !Path::new(filename).is_absolute() {
                         return Err(AdapterError("absolute_import_path_required"));
@@ -413,7 +423,17 @@ async fn execute(
                     if !imported {
                         return Err(AdapterError("imported_source_required"));
                     }
-                    if command == "import-rollout" {
+                    if command == "import-rollout-incremental" {
+                        let version = required(&flags, "source-version")?;
+                        let stream = required(&flags, "stream")?;
+                        let bytes =
+                            read_bounded_file(Path::new(filename), rollout::MAX_BYTES).await?;
+                        Some(crate::adapters::incremental::import_incremental_rollout(
+                            &store,
+                            &bytes,
+                            &json!({"sourceId":source,"streamId":stream,"observedAt":now_iso(),"sourceVersion":version}),
+                        )?)
+                    } else if command == "import-rollout" {
                         let version = required(&flags, "source-version")?;
                         let imported_at = now_iso();
                         let bytes =

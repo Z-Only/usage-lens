@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -97,6 +97,48 @@ try {
   assert.deepEqual(await readFile(db), beforeQuery.bytes, 'Read-only diagnostics changed database bytes');
   assert.equal((await stat(db)).mtimeMs, beforeQuery.modified, 'Read-only diagnostics changed database mtime');
   assert.deepEqual(await readdir(home), beforeQuery.files, 'Read-only diagnostics created a sidecar');
+
+  // Explicit one-shot ingestion only. Never inspect a real transcript or client home.
+  const rollout = join(home, 'synthetic-rollout.jsonl');
+  const sourceVersion = 'a75987455a2879ca151cea5e118fa307be868583';
+  const row = (type, payload) => JSON.stringify({ timestamp: '2026-10-03T00:00:00.000Z', type, payload });
+  const firstPrefix = row('session_meta', { id: 'synthetic-thread', session_id: 'synthetic-session' }) + '\n';
+  const message = row('response_item', { type: 'message', id: 'synthetic-message', role: 'user', content: [{ type: 'input_text', text: 'Synthetic local smoke only' }] });
+  const importArgs = ['import-rollout-incremental', '--db', db, '--source', 'release-smoke', '--file', rollout, '--stream', 'synthetic-stream', '--source-version', sourceVersion];
+  await writeFile(rollout, firstPrefix + message);
+  const initialImport = JSON.parse(run(importArgs));
+  assert.equal(initialImport.completeBytes, Buffer.byteLength(firstPrefix));
+  assert.equal(initialImport.completeLines, 1);
+  assert.equal(initialImport.deferredBytes, Buffer.byteLength(message));
+  assert.equal(initialImport.eventsInserted, '0', 'Unterminated valid JSON must be deferred');
+  await appendFile(rollout, '\n');
+  const appended = JSON.parse(run(importArgs));
+  assert.equal(appended.completeBytes, Buffer.byteLength(firstPrefix + message + '\n'));
+  assert.equal(appended.completeLines, 2);
+  assert.equal(appended.deferredBytes, 0);
+  assert.equal(appended.eventsInserted, '1');
+  assert.equal(appended.checkpointAdvanced, true);
+  const beforeNoOp = await readFile(db);
+  const repeated = JSON.parse(run(importArgs));
+  assert.equal(repeated.eventsInserted, '0');
+  assert.equal(repeated.responseTokensInserted, '0');
+  assert.equal(repeated.checkpointAdvanced, false);
+  assert.deepEqual(await readFile(db), beforeNoOp, 'Unchanged prefix must not rewrite store');
+  const upgradedRead = { bytes: await readFile(db), modified: (await stat(db)).mtimeMs, files: await readdir(home) };
+  const upgraded = JSON.parse(run(['doctor', '--db', db, '--source', 'release-smoke']));
+  assert.equal(upgraded.database.schemaVersion, 3);
+  assert.equal(upgraded.database.accessMode, 'read_only');
+  const importedHealth = JSON.parse(run(['health', '--db', db, '--source', 'release-smoke']));
+  assert.equal(importedHealth.stored.events.count, '1');
+  run(['status', '--db', db]);
+  run(['skill-summary', '--db', db, '--source', 'release-smoke']);
+  assert.deepEqual(await readFile(db), upgradedRead.bytes, 'Schema-3 queries changed database bytes');
+  assert.equal((await stat(db)).mtimeMs, upgradedRead.modified, 'Schema-3 queries changed database mtime');
+  assert.deepEqual(await readdir(home), upgradedRead.files, 'Schema-3 queries created a sidecar');
+  await writeFile(rollout, firstPrefix);
+  run(importArgs, 1);
+  assert.deepEqual(await readFile(db), upgradedRead.bytes, 'Truncation must not mutate records or progress');
+  assert.equal(JSON.parse(run(['health', '--db', db, '--source', 'release-smoke'])).stored.events.count, '1');
 
   const server = start(['serve', '--demo', '--port', '0']);
   const line = await firstLine(server);
@@ -193,7 +235,7 @@ try {
   assert.equal((await request('tools/call', {name:'usage_skills', arguments:{sourceId:'demo',fromDate:'2024-01-01',toDate:'2025-01-01'}})).isError, true);
   lines.close();
   await stop(mcp);
-  console.log('Extracted native artifact passed SQLite persistence, read-only doctor/health/skill trends, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
+  console.log('Extracted native artifact passed SQLite persistence, schema-2/3 read-only queries, incremental append/no-op/truncation, doctor/health/skill trends, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
 } finally {
   clearTimeout(limit);
   await Promise.all([...children].map(stop));

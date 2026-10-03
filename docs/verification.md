@@ -116,7 +116,7 @@ content. Application CSS is unchanged. The follow-up's actual browser execution
 and corrected screenshot review remain requirements of its exact-commit CI.
 
 
-## v0.3.0 skill-evidence-trends validation scope
+## Historical v0.3.0 skill-evidence-trends validation scope
 
 The historical results above remain tied to their original checkpoints. The new
 regression scope and local validation checkpoint are recorded below. Version
@@ -179,3 +179,57 @@ scroll, record offscreen unfocused skip-link geometry, and attach full-page imag
 when CI executes them. Actual browser results/pixel review, all four platform
 runtime jobs, extracted-package verification and exact-commit remote gates remain
 required before publication. No v0.3.0 release has been published by this check.
+
+## v0.4.0 incremental-import validation scope
+
+The new one-shot import requires an explicit bounded file, source, logical stream
+and pinned format version on each call. Its acceptance suite must cover complete
+prefix append, no-op replay, deferred valid-JSON and partial-UTF-8 tails,
+truncation/prefix mutation, copied-prefix continuation, immutable cross-run
+conflicts, stale concurrent checkpoint rejection and atomic failures. Existing
+snapshot imports and aggregate queries remain regression requirements.
+
+Store tests must establish schema-2 read-only compatibility without migration,
+atomic schema-3 migration only on successful incremental import, schema-3
+read-only compatibility, retention/content-delete replay protection, content
+opt-in without backfill, explicit all/source deletion reset and the documented
+pre-upgrade-history/cross-mode anonymous-identity limitations. Existing hard
+source/line/record/projection limits remain enforced; no bound can be bypassed by
+changing the logical stream name.
+
+The packaged-artifact smoke now exercises a synthetic schema-2 store and readonly
+queries, a valid unterminated JSON tail, newline append, unchanged-prefix no-op,
+schema-3 read-only queries and truncation without database mutation. It retains
+all existing local doctor/health, embedded HTTP/UI and eight-tool MCP checks in an
+isolated temporary home. It does not read personal histories, install a client,
+start Codex, authenticate, use real hooks or configure a daemon.
+
+Local documentation/build-script checkpoint on 2026-10-03: owned product-version
+static checks and all 67 Python scripts tests passed, including explicit Skill
+exclusion and backup/schema guidance. `node --check scripts/release/smoke.mjs`
+and all 38 synthetic release-tool tests passed. The updated release smoke passed
+against the local v0.4.0 debug executable, including all new incremental/schema
+checks and the existing local HTTP/UI/MCP checks. This was **not an extracted
+release package**, browser execution or cross-platform verification. Final
+exact-head production gates and release verification must be recorded
+independently; historical v0.3.0 results do not validate this change.
+
+Implementation checkpoint on 2026-10-03: the full Linux source gate passed with
+253 native Rust/SSR tests, all 67 script tests, rustfmt, native and WebAssembly
+clippy, embedded UI build and strict coverage inventory. Coverage was 7,207/7,560
+(95.3307%) total and 574/585 (98.1197%) changed executable lines against
+`e1a12e3fc5aa6750edb2dfda9a0bd1e393ef5abc`. The existing browser-only runtime
+remains conservatively uncovered; no suppression or missing-file exemption was
+added. The 35 new incremental tests include canonical source-event alias adoption,
+retention/capture-toggle non-resurrection, checkpoint-write failure rollback,
+concurrent compare-and-swap, read-only schema compatibility and replay node bounds.
+Independent synthetic CLI checks reproduced and then verified the alias-retention
+fix, including absence of the old-body canary in stored bytes.
+
+E2E TypeScript checking, the official JavaScript MCP SDK test, all 38 release-tool
+tests and the updated smoke against the current debug executable passed. Local
+Playwright could not launch: its pinned Chromium binary was absent, and a temporary
+configuration using installed Chromium was blocked by the environment's socket
+restrictions before any page loaded. That temporary configuration was removed.
+No browser pass is claimed. Exact-commit CI browser execution, all four native
+platform jobs and extracted release-package smoke remain required before release.
