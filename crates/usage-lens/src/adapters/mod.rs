@@ -2,6 +2,7 @@
 pub mod collect;
 pub mod demo;
 pub mod hooks;
+pub mod incremental;
 pub mod launch;
 pub mod read_only_rpc;
 pub mod rollout;

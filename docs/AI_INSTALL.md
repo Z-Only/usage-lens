@@ -20,14 +20,14 @@ Record a short install plan: exact version, repository, asset, installation dire
 
 Canonical repository: [Z-Only/usage-lens](https://github.com/Z-Only/usage-lens)
 
-Open [published releases](https://github.com/Z-Only/usage-lens/releases), read the chosen release notes, and pin the exact stable version. `0.3.0` below is an example, not a claim that the release already exists. If its assets have not been published, stop; never substitute GitHub's automatically generated source archives for an executable release.
+Open [published releases](https://github.com/Z-Only/usage-lens/releases), read the chosen release notes, and pin the exact stable version. `0.4.0` below is an example, not a claim that the release already exists. If its assets have not been published, stop; never substitute GitHub's automatically generated source archives for an executable release.
 
-| Detected system | CPU | Asset for version `0.3.0` |
+| Detected system | CPU | Asset for version `0.4.0` |
 | --- | --- | --- |
-| Linux x64 (static musl) | x86_64 | `usage-lens-0.3.0-linux-x64.tar.gz` |
-| macOS 11.0 deployment target; tested on 15 | arm64 / Apple Silicon | `usage-lens-0.3.0-macos-arm64.tar.gz` |
-| macOS 11.0 deployment target; tested on 15 | x86_64 / Intel | `usage-lens-0.3.0-macos-x64.tar.gz` |
-| Windows x64 | AMD64 | `usage-lens-0.3.0-windows-x64.tar.gz` |
+| Linux x64 (static musl) | x86_64 | `usage-lens-0.4.0-linux-x64.tar.gz` |
+| macOS 11.0 deployment target; tested on 15 | arm64 / Apple Silicon | `usage-lens-0.4.0-macos-arm64.tar.gz` |
+| macOS 11.0 deployment target; tested on 15 | x86_64 / Intel | `usage-lens-0.4.0-macos-x64.tar.gz` |
+| Windows x64 | AMD64 | `usage-lens-0.4.0-windows-x64.tar.gz` |
 
 The matching sidecar replaces `.tar.gz` with `.manifest.json`. Also download `SHA256SUMS` and `release.json` from **the same tag's release**. Assets include a native Rust executable, embedded Leptos UI, bundled SQLite, license, third-party license/notice bundles, documentation, and inert plugin examples. No Node, Bun, Rust, npm, compiler, or package installation is required on the user's computer. The Linux executable is statically linked with musl; it does not require a particular glibc version. Native OS/kernel compatibility still matters.
 
@@ -40,13 +40,13 @@ Windows builds use the static MSVC runtime. GitHub tests them on Windows Server 
 Use the browser or an ordinary HTTPS download tool. Never use `curl | sh`, run an installer fetched from another site, or install packages to make a checksum command work. Example URL pattern:
 
 ```text
-https://github.com/Z-Only/usage-lens/releases/download/v0.3.0/usage-lens-0.3.0-macos-arm64.tar.gz
+https://github.com/Z-Only/usage-lens/releases/download/v0.4.0/usage-lens-0.4.0-macos-arm64.tar.gz
 ```
 
 In a new temporary download directory, the following POSIX example downloads only public release files. Set `platform` from the table, and set `version` to the version the user selected:
 
 ```sh
-version=0.3.0
+version=0.4.0
 platform=macos-arm64
 asset="usage-lens-${version}-${platform}.tar.gz"
 manifest="usage-lens-${version}-${platform}.manifest.json"
@@ -75,7 +75,7 @@ Read the verified manifest as data. Require:
 
 List archive contents with `tar -tzf ASSET` and `tar -tvzf ASSET` (Windows: `tar.exe`). Every member must be a regular file inside the single expected `usage-lens-VERSION-PLATFORM/` directory. Reject absolute paths, `..`, links, devices, unexpected executables, databases, logs, credentials, or install scripts. Extract into a **new, empty user-owned directory**, never on top of an existing installation. Compare the internal `manifest.json` with the verified sidecar. Before execution, compare the extracted executable's SHA-256 to its `files` entry too (`shasum -a 256`, `sha256sum`, or `Get-FileHash`). Retain the checksums and manifest with the installation record.
 
-A convenient final directory is `~/.local/share/usage-lens/0.3.0/` on macOS/Linux or `%LOCALAPPDATA%\UsageLens\0.3.0\` on Windows. Do not require administrator access. Leave previous versions in their own directories. Do not edit PATH or add a startup service unless separately requested.
+A convenient final directory is `~/.local/share/usage-lens/0.4.0/` on macOS/Linux or `%LOCALAPPDATA%\UsageLens\0.4.0\` on Windows. Do not require administrator access. Leave previous versions in their own directories. Do not edit PATH or add a startup service unless separately requested.
 
 ## 4. Verify setup and the isolated synthetic demo
 
@@ -104,6 +104,15 @@ Do not bind to `0.0.0.0`, expose the port, open a firewall rule, or establish a 
 
 Explain the intended absolute database path, what will be retained, and which operation the user is authorizing. Keep data outside the executable directory, cloud-synced folders, and repositories. The default is no content capture. Create an explicit imported source only when requested:
 
+**v0.4.0 upgrade warning:** before the first successful
+`import-rollout-incremental` into an existing store, stop all writers and make a
+verified private backup. That explicit write upgrades schema 2 to schema 3
+atomically with its import. v0.3.0 and older cannot read schema 3; binary-only
+rollback will not work. Ordinary writable opens/new stores stay on schema 2 until
+this upgrade, and read-only queries never migrate. Follow the
+[backup and rollback steps](#upgrade-rollback-and-uninstall), even if the import
+file contains only synthetic records but the chosen store is real.
+
 ```sh
 ./usage-lens source --db /absolute/private/path/usage.sqlite \
   --source local-records --mode imported --name "Local records"
@@ -130,7 +139,7 @@ fresh or historically complete. Check [health semantics](data-contract.md#collec
 before interpreting counts or timestamps. Invalid explicit input or an incompatible
 store remains an error, not permission to repair or collect.
 
-- **Imports:** have the user select a specific compatible file. Do not scan protected transcript directories or follow file paths found inside a record. See [record import](record-import.md). Do not copy private records into the install directory, support tickets, CI, or this repository
+- **Imports:** have the user select a specific compatible absolute file path. Snapshot `import-rollout` is unchanged. The separate `import-rollout-incremental --db ABS --source ID --file ABS --stream ID --source-version PINNED_COMMIT` requires every input each time; it boundedly rereads the complete prefix and defers every unterminated tail. It does not watch, schedule, discover/glob files or reopen a remembered path. Back up before its schema upgrade. Do not scan protected transcript directories or follow file paths found inside a record. See [record import](record-import.md). Do not copy private records into the install directory, support tickets, CI, or this repository
 - **Collector:** explain that it launches the user's installed Codex app-server and can initialize configured integrations, access existing authentication, and contact provider services. Get specific approval before running `collect --accept-startup-risk`. Do not log in or access authentication as a side effect of installation; do not copy, print, upload, or retain secrets
 - **Content:** ask separately before enabling content capture, and explain that best-effort redaction is not a guarantee against sensitive data retention
 - **Hooks/background startup:** show the exact configuration and scope first; get approval before changing client settings or enabling persistence. No registration is automatic
@@ -158,7 +167,7 @@ to the chosen Skill directory. Replace `install_root` with the actual extracted
 release directory. This POSIX example refuses to overwrite an existing Skill:
 
 ```sh
-install_root='/ABSOLUTE/usage-lens-0.3.0'
+install_root='/ABSOLUTE/usage-lens-0.4.0'
 skills_root="$HOME/.agents/skills"
 destination="$skills_root/usage-summary"
 if [ -e "$destination" ] || [ -L "$destination" ]; then
@@ -172,7 +181,7 @@ Equivalent Windows PowerShell (no administrator permissions):
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$installRoot = 'C:\ABSOLUTE\usage-lens-0.3.0'
+$installRoot = 'C:\ABSOLUTE\usage-lens-0.4.0'
 $skillsRoot = Join-Path $HOME '.agents\skills'
 $destination = Join-Path $skillsRoot 'usage-summary'
 if (Test-Path -LiteralPath $destination) { throw 'Skill already exists; review an explicit upgrade before replacing it.' }
@@ -230,11 +239,13 @@ is a separate setup diagnostic and is outside the Skill. The local `skills` evid
 command is explicitly outside the conversational allowlist; never use it as a
 fallback or send its individual event/session/turn records to an assistant.
 
-Persisted queries in v0.3.0 open the existing database read-only. They require
-schema 2 and rollback-journal mode; normal v0.1.0 stores remain compatible without
-migration, as do v0.1.1 and v0.2.0 stores. v0.3.0 adds no database migration or
-collector changes; incremental collection remains deferred. A missing, unreadable
-or invalid store, or an externally WAL-converted store, returns `storage_error`; schema 0/1 or a future version returns `unsupported_schema`.
+Persisted queries in v0.4.0 open the existing database read-only. They support
+schema 2 or 3 and rollback-journal mode; normal v0.1.0 stores remain compatible
+without migration, as do v0.1.1, v0.2.0 and v0.3.0 schema-2 stores. Querying never
+upgrades a store. Only a successful explicit incremental import performs the
+schema-3 upgrade; `import-rollout-incremental` is a separate write workflow and is
+outside the Skill. A missing, unreadable or invalid store, or an externally
+WAL-converted store, returns `storage_error`; schema 0/1 or a future version returns `unsupported_schema`.
 The errors intentionally omit private paths and contents. Do not infer a specific
 cause from `storage_error`, and do not run a migration, SQLite/PRAGMA command, or
 writable setup to make a query succeed. Any repair/upgrade is a separate reviewed
@@ -279,6 +290,12 @@ local content review part of conversational setup.
 Finish with the exact installed version/commit, path, demo result, data location if created, and every configuration changed. Clearly list anything that remains untested. Do not claim a live-account or real-client integration passed from a synthetic smoke test.
 
 ## Upgrade, rollback, and uninstall
+
+**For v0.4.0, make and verify the backup before authorizing the first incremental
+import.** A successful import upgrades schema 2 to 3 atomically. v0.3.0 and older
+cannot open schema 3. A failed parse/validation does not migrate, and a read-only
+v0.4.0 query works against schema 2 without upgrading. Do not downgrade the live
+store or assume installing an older binary reverses the migration.
 
 1. Read the target release's breaking-change/schema notes. Stop every server, MCP process, hook writer, and collector using this store
 2. Make a verified private backup while the database is closed. Preserve the SQLite database and any remaining `-wal`/`-shm` files together, or use a documented SQLite backup operation. Do not copy only the main file from an active WAL database. Keep backups local and outside the installation directory

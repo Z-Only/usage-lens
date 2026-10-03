@@ -112,7 +112,7 @@ class NativePluginExamplesTests(unittest.TestCase):
         self.assertIn('Never run migrations', skill)
         boundary = skill.split('## Query boundary', 1)[1].split('## Optional MCP', 1)[0]
         self.assertIn('Never run', boundary)
-        for command in ['skills', 'history', 'events', 'detail', 'import', 'import-rollout',
+        for command in ['skills', 'history', 'events', 'detail', 'import', 'import-rollout', 'import-rollout-incremental',
                         'hook', 'settings', 'delete', 'retention', 'source',
                         'collect', 'serve', 'doctor', 'mcp']:
             self.assertIn(f'`{command}`', boundary)
@@ -143,16 +143,32 @@ class NativePluginExamplesTests(unittest.TestCase):
         self.assertIn('inclusive UTC, at most 366 days', section)
         self.assertIn('`fromDate`, `toDate` and `skillName`', section)
         self.assertIn('Missing days\nare unknown', section)
-        self.assertIn('schema 2 and rollback-journal mode', section)
+        self.assertIn('schema 2 or 3 and rollback-journal mode', section)
         self.assertIn('normal v0.1.0 stores remain compatible', section)
         self.assertIn('`storage_error`', section)
         self.assertIn('`unsupported_schema`', section)
+        self.assertIn('`import-rollout-incremental` is a separate write workflow', section)
         for path in [ROOT / 'README.md', PLUGIN / 'README.md']:
             with self.subTest(path=path):
                 text = path.read_text()
                 self.assertIn('Skill + local CLI', text)
                 self.assertIn('Optional MCP', text)
                 self.assertIn('6-primary-conversational-integration-skill--local-cli', text)
+
+    def test_incremental_import_is_explicit_and_requires_backup(self):
+        paths = [ROOT / 'README.md', ROOT / 'docs/AI_INSTALL.md', ROOT / 'docs/record-import.md',
+                 PLUGIN / 'README.md', PLUGIN / 'skills/usage-summary/SKILL.md']
+        for path in paths:
+            with self.subTest(path=path.relative_to(ROOT)):
+                text = path.read_text()
+                self.assertIn('import-rollout-incremental', text)
+                self.assertIn('backup', text)
+                self.assertIn('v0.3.0 and older cannot', text)
+        contract = (ROOT / 'docs/record-import.md').read_text()
+        for phrase in ['not O(delta)', 'Every\nunterminated tail is deferred',
+                       'not a verified physical-file identity', 'compare-and-swap',
+                       'cannot resurrect', 'cross-mode', '256 KiB', '20,000']:
+            self.assertIn(phrase.lower(), contract.lower())
 
     def test_conversational_docs_use_skill_summary_not_raw_skill_records(self):
         paths = [ROOT / 'README.md', ROOT / 'docs/AI_INSTALL.md', ROOT / 'docs/privacy.md',

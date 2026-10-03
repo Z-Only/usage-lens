@@ -31,8 +31,8 @@ be represented as date-range or skill-specific completeness. The local `skills`
 command exposes individual evidence records and
 must not be called through this Skill or used as an aggregate fallback. This
 instruction boundary is not an OS sandbox for a client with general shell access.
-Persisted query commands use a read-only SQLite connection and require a current
-schema-2 rollback-journal store. They never create a missing database or migrate an
+Persisted query commands use a read-only SQLite connection and accept a supported
+schema-2 or schema-3 rollback-journal store. They never create a missing database or migrate an
 old schema. Errors intentionally omit database paths and contents. A failed query
 must not trigger SQLite/PRAGMA commands or writable setup through the Skill.
 `health` and optional MCP `usage_health` return selected-source aggregate counts,
@@ -57,6 +57,26 @@ Credentials, authentication cookies, and keys are not collection targets. Known 
 System/developer instruction records and hidden reasoning are outside the supported content event types. Never interpret an unsupported record as an ordinary assistant message merely to keep it.
 
 ## Local storage and retention
+
+Incremental import is a separate explicit write, outside the conversational Skill
+and MCP tools. The caller supplies the file path, source, logical stream ID and
+version each time. It never stores a path to reopen, discovers files, schedules
+work or installs a watcher. Its checkpoint contains complete byte/line counts, a
+SHA-256 prefix digest and parser/source versions, plus a source-wide hashed
+identity ledger. Pending tails, pending call bodies and raw parse state are not
+persisted. Ordinary opt-in retained content remains subject to the rules above.
+
+Retention and content-only deletion preserve this replay metadata so old prefixes
+cannot restore deleted evidence/content or backfill content after capture is
+enabled. Explicit delete-all, including source-scoped delete-all, resets the
+corresponding replay/checkpoint metadata. Schema 3 cannot reconstruct history
+already deleted before upgrade, and no cross-mode anonymous-record deduplication
+is claimed. Hashes and metadata are not anonymization guarantees; treat the whole
+store as private. See the [incremental contract](record-import.md#incremental-one-shot-workflow).
+
+**Make a verified private backup of the closed store before its first incremental
+import.** The first successful incremental transaction upgrades to schema 3,
+which v0.3.0 and older cannot read. Query-only use does not migrate schema 2.
 
 Treat the database and any exports or backups as sensitive files. Restrict access to your operating-system account. Local-only processing does not protect against another program running as that account, device compromise, a shared machine, or automatic backup/sync software.
 

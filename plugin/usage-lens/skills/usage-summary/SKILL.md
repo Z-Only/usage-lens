@@ -19,8 +19,8 @@ its result, confirmed by the user or their existing configuration. If the intend
 source is ambiguous, ask. Never merge sources, substitute another store, or present
 a demo source as the user's account. A missing/unreadable store or failed query is
 an error; do not create a source, initialize a store, or refresh collection to fix it.
-Persisted queries require an existing schema-2 rollback-journal database (normal
-v0.1.0, v0.1.1 and v0.2.0 stores remain compatible without migration in v0.3.0). `unsupported_schema` means the schema is not
+Persisted queries in v0.4.0 accept an existing schema-2 or schema-3 rollback-journal
+database; older schema-2 stores remain compatible without migration. `unsupported_schema` means the schema is not
 supported; `storage_error` can mean a missing/unreadable/invalid store or unsupported
 WAL mode. Report the error without guessing its cause. Never run migrations,
 SQLite/PRAGMA commands, or writable setup as a query fallback.
@@ -100,12 +100,19 @@ label every result synthetic. Never use demo as a fallback for a real query.
 
 ## Query boundary
 
-Never run `skills`, `history`, `events`, `detail`, `import`, `import-rollout`, `hook`, `settings`,
+Never run `skills`, `history`, `events`, `detail`, `import`, `import-rollout`, `import-rollout-incremental`, `hook`, `settings`,
 `delete`, `retention`, `source`, `collect`, `serve`, `doctor`, or `mcp` through this CLI query
 skill. Do not enable capture, install integrations, create authentication, or launch
 collection to answer a query. These are separate workflows requiring their own
 scope and authorization. `doctor` belongs to separate local setup diagnostics,
 not the aggregate query workflow. This skill is an instruction boundary, not an OS sandbox.
+
+Incremental import is a separate explicit one-shot write, requiring the absolute
+file path, source, logical stream ID and pinned source version each time. It never
+watches, schedules, discovers files or reopens a remembered path. Its first
+successful import upgrades the store to schema 3; v0.3.0 and older cannot read it.
+That workflow requires a verified closed-store backup first. Never trigger it to
+answer a query, populate missing evidence or repair an unsupported schema.
 
 Never transmit raw bodies, prompts, tool arguments/results, titles, file contents,
 or the database to a model through this skill. Query results themselves are shared
@@ -154,8 +161,8 @@ reads establish loaded evidence only; they do not establish invocation or task
 success. Main-prompt reads and instruction injections can overlap; evidence counts
 do not establish unique executions. Do not attribute response or turn tokens to a
 skill. The local hooks cover only future supported local events, not all ChatGPT
-activity. Incremental collection is deferred; this query adds no collection,
-checkpoint, retention or schema changes.
+activity. A separately authorized incremental import can add supplied local
+evidence, but this query adds no collection, checkpoint, retention or schema changes.
 
 A Skill does not grant computer access. Cloud-only ChatGPT cannot directly execute
 a local CLI or reach local stdio/loopback. Any remote setup requires separate user

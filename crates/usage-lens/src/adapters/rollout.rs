@@ -1,4 +1,4 @@
-//! Pure, bounded projection of one explicitly selected, unverified JSONL file.
+//! Pure, bounded projection of an explicitly selected, unverified JSONL buffer.
 //! This module never discovers files, follows embedded paths, or executes content.
 use super::AdapterError;
 use crate::core::{normalize::count, validation};
@@ -10,6 +10,7 @@ use std::{collections::HashMap, sync::LazyLock};
 
 pub const ROLLOUT_SOURCE_VERSION: &str = "a75987455a2879ca151cea5e118fa307be868583";
 pub const ROLLOUT_ADAPTER_VERSION: &str = "usage-lens-rollout/0.1.0";
+pub const INCREMENTAL_ADAPTER_VERSION: &str = "usage-lens-rollout-incremental/0.1.0";
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_LINE_BYTES: usize = 256 * 1024;
 pub const MAX_LINES: usize = 20000;
@@ -217,9 +218,9 @@ fn time(value: &Value) -> Result<String, AdapterError> {
     ))
 }
 /// Bound nesting before parsing, including nested tool JSON. Embedded paths stay inert.
-fn parse_json(input: &str, max_depth: usize) -> Result<Value, AdapterError> {
+fn check_depth(input: &[u8], max_depth: usize) -> Result<(), AdapterError> {
     let (mut depth, mut quoted, mut escaped) = (0_i32, false, false);
-    for byte in input.bytes() {
+    for &byte in input {
         if quoted {
             if escaped {
                 escaped = false;
@@ -239,6 +240,11 @@ fn parse_json(input: &str, max_depth: usize) -> Result<Value, AdapterError> {
             depth -= 1;
         }
     }
+    Ok(())
+}
+
+fn parse_json(input: &str, max_depth: usize) -> Result<Value, AdapterError> {
+    check_depth(input.as_bytes(), max_depth)?;
     let value: Value =
         serde_json::from_str(input).map_err(|_| AdapterError("rollout_invalid_json"))?;
     fn numbers(value: &Value) -> bool {
@@ -338,9 +344,95 @@ fn extend(mut value: Value, fields: Value) -> Value {
     value
 }
 
+/// Incremental evidence contains only bounded identities, hashes, and physical line numbers.
+/// Content and import-time settings never become part of a replay identity.
+#[derive(Default)]
+struct IncrementalEvidence {
+    records: Vec<Value>,
+    indexes: HashMap<(String, String), usize>,
+    event_lines: HashMap<String, usize>,
+    response_lines: Vec<usize>,
+}
+impl IncrementalEvidence {
+    fn record(
+        &mut self,
+        kind: &str,
+        identity: &str,
+        immutable: &Value,
+        line: usize,
+        conflict: &'static str,
+    ) -> Result<bool, AdapterError> {
+        let key = (kind.to_owned(), identity.to_owned());
+        let digest = hash(stable(immutable));
+        if let Some(index) = self.indexes.get(&key) {
+            if self.records[*index]["digest"] != digest {
+                return Err(AdapterError(conflict));
+            }
+            return Ok(false);
+        }
+        if self.records.len() >= MAX_LINES {
+            return Err(AdapterError("rollout_replay_limit"));
+        }
+        self.indexes.insert(key, self.records.len());
+        self.records
+            .push(json!({"kind":kind,"identity":identity,"digest":digest,"line":line}));
+        Ok(true)
+    }
+}
+
+fn immutable_position(position: &Position) -> Value {
+    json!({"thread":position.thread,"occurredAt":position.time,
+        "sessionId":position.session,"turnId":position.turn,"model":position.model})
+}
+
+// Snapshot parsing intentionally retains its existing last-wins behavior. Incremental
+// replay instead rejects changed evidence and keeps the first equivalent observation.
+fn add_projected_event(
+    events: &mut Vec<Value>,
+    indexes: &mut HashMap<String, usize>,
+    event: Value,
+    limit: usize,
+    incremental: &mut Option<IncrementalEvidence>,
+    evidence: (Value, usize),
+) -> Result<(), AdapterError> {
+    if let Some(incremental) = incremental {
+        let identity = event["eventId"].as_str().expect("constructed event ID");
+        if !incremental.record(
+            "event",
+            identity,
+            &evidence.0,
+            evidence.1,
+            "rollout_conflicting_event_identity",
+        )? {
+            return Ok(());
+        }
+        incremental
+            .event_lines
+            .insert(identity.to_owned(), evidence.1);
+    }
+    add_event(events, indexes, event, limit)
+}
+
+/// Re-project a bounded, caller-selected stream from its beginning. Only newline-
+/// terminated records are eligible; the final partial line is deferred verbatim.
+/// Callers retain the complete prefix hash and positions to validate append-only replay.
+pub fn parse_incremental_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterError> {
+    let stream = validation::source_id(&options["streamId"])
+        .map_err(|_| AdapterError("rollout_invalid_stream_id"))?;
+    parse_projection(bytes, options, Some(&stream))
+}
+
 /// Atomically parse one caller-selected byte buffer. No partial batch is returned on error.
 /// Limits may be tightened by callers but can never exceed the hard bounds.
 pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterError> {
+    parse_projection(bytes, options, None)
+}
+
+fn parse_projection(
+    bytes: &[u8],
+    options: &Value,
+    stream: Option<&str>,
+) -> Result<Value, AdapterError> {
     if !options.is_object() || options["sourceVersion"] != ROLLOUT_SOURCE_VERSION {
         return Err(AdapterError("rollout_unsupported_source_version"));
     }
@@ -368,10 +460,35 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
     if bytes.len() > limits["maxBytes"] {
         return Err(AdapterError("rollout_byte_limit"));
     }
-    let decoded = std::str::from_utf8(bytes).map_err(|_| AdapterError("rollout_invalid_utf8"))?;
+    let complete_bytes = if stream.is_some() {
+        let physical_lines = bytes.iter().filter(|byte| **byte == b'\n').count()
+            + usize::from(!bytes.is_empty() && !bytes.ends_with(b"\n"));
+        if physical_lines > limits["maxLines"] {
+            return Err(AdapterError("rollout_line_count_limit"));
+        }
+        for line in bytes.split(|byte| *byte == b'\n').take(physical_lines) {
+            if line.len() > limits["maxLineBytes"] {
+                return Err(AdapterError("rollout_line_byte_limit"));
+            }
+            check_depth(line, limits["maxDepth"])?;
+        }
+        bytes
+            .iter()
+            .rposition(|byte| *byte == b'\n')
+            .map_or(0, |index| index + 1)
+    } else {
+        bytes.len()
+    };
+    let complete_lines = bytes[..complete_bytes]
+        .iter()
+        .filter(|byte| **byte == b'\n')
+        .count();
+    let decoded = std::str::from_utf8(&bytes[..complete_bytes])
+        .map_err(|_| AdapterError("rollout_invalid_utf8"))?;
     // TextDecoder's reference behavior drops only an initial UTF-8 BOM; hashing uses original bytes.
     let decoded = decoded.strip_prefix('\u{feff}').unwrap_or(decoded);
-    let fingerprint = hash(bytes);
+    let fingerprint = hash(&bytes[..complete_bytes]);
+    let mut incremental = stream.map(|_| IncrementalEvidence::default());
     let mut warnings = vec![
         "imported_unverified_partial",
         "skill_evidence_may_overlap",
@@ -384,7 +501,10 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
     let mut outputs: HashMap<String, Output> = HashMap::new();
     let mut tokens = Vec::new();
     let mut token_signatures: HashMap<String, String> = HashMap::new();
-    let mut thread = format!("unknown-{fingerprint}");
+    let identity_scope = stream
+        .map(|stream| hash(stable(&json!(["stream", stream]))))
+        .unwrap_or_else(|| fingerprint.clone());
+    let mut thread = format!("unknown-{identity_scope}");
     let (mut session, mut turn, mut model) = (None, None, None);
     let mut records_seen = 0;
     let mut lines: Vec<_> = decoded.split('\n').collect();
@@ -466,7 +586,11 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
             session: session.clone(),
             turn: turn.clone(),
             model: model.clone(),
-            identity: format!("{fingerprint}:{ordinal}:{}", index + 1),
+            identity: if stream.is_some() {
+                format!("{identity_scope}:{}", index + 1)
+            } else {
+                format!("{fingerprint}:{ordinal}:{}", index + 1)
+            },
         };
         match envelope["type"].as_str().expect("validated type") {
             "token_usage_record" => {
@@ -489,12 +613,24 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
                 let signature = stable(
                     &json!({"thread_id":raw["thread_id"],"turn_id":raw["turn_id"],"session_id":raw["session_id"],"root_turn_id":raw["root_turn_id"],"response_id":raw["response_id"],"usage":raw["usage"],"occurredAt":occurred_at,"model":direct_model}),
                 );
+                if let Some(incremental) = &mut incremental {
+                    incremental.record(
+                        "response",
+                        &format!("response-{}", hash(&identity)),
+                        &json!(signature),
+                        index + 1,
+                        "rollout_conflicting_response_identity",
+                    )?;
+                }
                 if let Some(previous) = token_signatures.get(&identity) {
                     if previous != &signature {
                         return Err(AdapterError("rollout_conflicting_response_identity"));
                     }
                 } else {
                     token_signatures.insert(identity, signature);
+                    if let Some(incremental) = &mut incremental {
+                        incremental.response_lines.push(index + 1);
+                    }
                     tokens.push(json!({"sourceId":source,"importedAt":observed_at,"occurredAt":occurred_at,"model":direct_model,"collectorVersion":ROLLOUT_ADAPTER_VERSION,"raw":raw}));
                 }
                 if tokens.len() > limits["maxResponseTokens"] {
@@ -524,9 +660,11 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
         if kind == Some("function_call") || kind == Some("function_call_output") {
             let key = stable(&json!([thread, id(&payload["call_id"])?]));
             let signature = if kind == Some("function_call") {
-                stable(
-                    &json!({"namespace":payload["namespace"],"name":payload["name"],"arguments":payload["arguments"]}),
-                )
+                let mut immutable = json!({"namespace":payload["namespace"],"name":payload["name"],"arguments":payload["arguments"]});
+                if incremental.is_some() {
+                    immutable["position"] = immutable_position(&position);
+                }
+                stable(&immutable)
             } else {
                 let value = payload
                     .get("output")
@@ -561,6 +699,18 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
                     ));
                 }
             } else {
+                if let Some(incremental) = &mut incremental {
+                    // Output timestamp and position describe where an identical output was
+                    // copied, not different result evidence. Keep its earliest occurrence;
+                    // the independent skill proof below uses the first eligible output.
+                    incremental.record(
+                        "tool_output",
+                        &format!("output-{}", hash(&key)),
+                        &json!(signature),
+                        index + 1,
+                        "rollout_conflicting_output_identity",
+                    )?;
+                }
                 let previous = outputs.get(&key);
                 if previous.is_some_and(|p| p.signature != signature) {
                     return Err(AdapterError("rollout_conflicting_output_identity"));
@@ -627,7 +777,18 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
                     common(&position, &source, &observed_at),
                     json!({"eventId":identity,"sourceEventId":identity,"eventType":"skill_loaded","evidenceType":"typed_skill_injection","skillEvidenceKind":"instruction_injection","skillName":name,"status":"unknown"}),
                 );
-                add_event(&mut events, &mut event_indexes, event, limits["maxEvents"])?;
+                add_projected_event(
+                    &mut events,
+                    &mut event_indexes,
+                    event,
+                    limits["maxEvents"],
+                    &mut incremental,
+                    (
+                        json!({"position":immutable_position(&position),
+                        "kind":kind,"part":part}),
+                        position.line,
+                    ),
+                )?;
             } else if kind.is_null()
                 && part.is_object()
                 && part["type"]
@@ -655,9 +816,20 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
         if capture {
             event["content"] = json!({"body":body.join("\n")});
         }
-        add_event(&mut events, &mut event_indexes, event, limits["maxEvents"])?;
+        add_projected_event(
+            &mut events,
+            &mut event_indexes,
+            event,
+            limits["maxEvents"],
+            &mut incremental,
+            (
+                json!({"position":immutable_position(&position),
+                "role":role,"channel":payload["channel"],"body":body}),
+                position.line,
+            ),
+        )?;
     }
-    if records_seen == 0 {
+    if records_seen == 0 && stream.is_none() {
         return Err(AdapterError("rollout_empty_input"));
     }
     for (key, call) in &calls {
@@ -719,7 +891,14 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
         if capture {
             event["content"] = Value::Object(content);
         }
-        add_event(&mut events, &mut event_indexes, event, limits["maxEvents"])?;
+        add_projected_event(
+            &mut events,
+            &mut event_indexes,
+            event,
+            limits["maxEvents"],
+            &mut incremental,
+            (json!({"call":call.signature}), position.line),
+        )?;
         if output.is_none() {
             warn(&mut warnings, "unmatched_tool_call");
         }
@@ -754,7 +933,19 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
             common(position, &source, &observed_at),
             json!({"occurredAt":output.expect("valid result requires output").time,"eventId":identity,"sourceEventId":identity,"eventType":"skill_loaded","evidenceType":"successful_skill_read","skillEvidenceKind":"main_read","skillName":args["package"],"status":"success"}),
         );
-        add_event(&mut events, &mut event_indexes, event, limits["maxEvents"])?;
+        let proof = output.expect("valid result requires output");
+        add_projected_event(
+            &mut events,
+            &mut event_indexes,
+            event,
+            limits["maxEvents"],
+            &mut incremental,
+            (
+                json!({"call":call.signature,"output":proof.signature,
+                "occurredAt":proof.time}),
+                proof.line,
+            ),
+        )?;
     }
     if outputs.keys().any(|k| !call_indexes.contains_key(k)) {
         warn(&mut warnings, "unmatched_tool_output");
@@ -762,6 +953,13 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
     let warning_texts: Vec<_> = warnings
         .iter()
         .map(|code| {
+            if stream.is_some() {
+                match *code {
+                    "copied_histories_may_overlap" => return "Copied or forked histories may overlap. Missing stable identities are scoped to this stream, not globally deduplicated.",
+                    "file_scoped_tool_identity" => return "Tool records without preceding session metadata use stream-scoped identities.",
+                    _ => {}
+                }
+            }
             WARNING_TEXT
                 .iter()
                 .find(|(key, _)| key == code)
@@ -775,6 +973,17 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
     // Move potentially large content into the projection, then bound it before making batch copies.
     projection["events"] = Value::Array(events);
     projection["responseTokens"] = Value::Array(tokens);
+    if incremental.is_some() {
+        projection["adapterVersion"] = json!(INCREMENTAL_ADAPTER_VERSION);
+        for collection in ["events", "responseTokens"] {
+            for record in projection[collection]
+                .as_array_mut()
+                .expect("constructed records")
+            {
+                record["collectorVersion"] = json!(INCREMENTAL_ADAPTER_VERSION);
+            }
+        }
+    }
     validation::preflight_rollout_import(&projection)
         .map_err(|_| AdapterError("rollout_projection_limit"))?;
     projection
@@ -783,5 +992,28 @@ pub fn parse_rollout(bytes: &[u8], options: &Value) -> Result<Value, AdapterErro
         .remove("importedAt");
     projection["warnings"] = json!(warning_texts);
     projection["recordsSeen"] = json!(records_seen);
+    if let Some(incremental) = incremental {
+        projection["streamId"] = json!(stream.expect("incremental stream"));
+        projection["completeBytes"] = json!(complete_bytes);
+        projection["completeLines"] = json!(complete_lines);
+        projection["deferredBytes"] = json!(bytes.len() - complete_bytes);
+        projection["eventPositions"] = json!(
+            projection["events"]
+                .as_array()
+                .expect("constructed events")
+                .iter()
+                .map(|event| {
+                    incremental.event_lines
+                        [event["eventId"].as_str().expect("constructed event ID")]
+                })
+                .collect::<Vec<_>>()
+        );
+        projection["responsePositions"] = json!(incremental.response_lines);
+        projection["replayRecords"] = Value::Array(incremental.records);
+        // Replay evidence shares the store's bounded metadata shape, including its
+        // global node budget; MAX_LINES is a ceiling, not an exemption from it.
+        validation::check_size(&projection["replayRecords"], MAX_BYTES)
+            .map_err(|_| AdapterError("rollout_projection_limit"))?;
+    }
     Ok(projection)
 }

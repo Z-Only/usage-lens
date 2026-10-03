@@ -1,5 +1,6 @@
 """Regression checks for the narrow, intentionally non-security-complete guard."""
 from pathlib import Path
+import json
 import tempfile
 import unittest
 
@@ -7,6 +8,50 @@ import check_static as guard
 
 
 class StaticTests(unittest.TestCase):
+    def version_fixture(self, root):
+        for name in guard.OWNED_CARGO_PACKAGES:
+            path = root / f'crates/{name}/Cargo.toml'
+            path.parent.mkdir(parents=True)
+            path.write_text(f'[package]\nname = "{name}"\nversion = "0.4.0"\n')
+        for name in guard.OWNED_JSON_VERSIONS:
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({'name': 'usage-lens', 'version': '0.4.0'}))
+        (root / 'Cargo.lock').write_text(''.join(
+            f'[[package]]\nname = "{name}"\nversion = "0.4.0"\n'
+            for name in guard.OWNED_CARGO_PACKAGES) +
+            '[[package]]\nname = "unrelated-dependency"\nversion = "0.3.0"\n')
+
+    def test_owned_versions_match_without_rewriting_dependencies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.version_fixture(root)
+            self.assertEqual(guard.check_versions(root), [])
+            for name in [*guard.OWNED_JSON_VERSIONS,
+                         *[f'crates/{name}/Cargo.toml' for name in guard.OWNED_CARGO_PACKAGES],
+                         'Cargo.lock']:
+                path = root / name
+                original = path.read_text()
+                path.write_text(original.replace('0.4.0', '0.3.0', 1))
+                with self.subTest(name=name):
+                    self.assertTrue(guard.check_versions(root))
+                path.write_text(original)
+
+    def test_owned_version_inventory_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertTrue(guard.check_versions(root))
+            self.version_fixture(root)
+            lock = root / 'Cargo.lock'
+            original = lock.read_text()
+            for content in ['invalid TOML', original.replace('usage-lens-ui', 'missing-owned-ui'),
+                            original + '[[package]]\nname = "usage-lens"\nversion = "0.4.0"\n']:
+                lock.write_text(content)
+                self.assertTrue(guard.check_versions(root))
+            lock.write_text(original)
+            (root / 'package.json').write_text('{"name":"wrong","version":"0.4.0"}')
+            self.assertTrue(guard.check_versions(root))
+
     def test_allow_collection_storage_and_same_origin_fetch(self):
         source = "const body = input.prompt; store.save(body); fetch('/api/overview');"
         self.assertEqual(guard.inspect_source(source), [])

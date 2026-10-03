@@ -124,6 +124,31 @@ usage-lens response-tokens --db "$HOME/.usage-lens/usage.sqlite" \
 
 The version flag declares the format you intend to parse; it does not authenticate the file or prove complete collection. Review returned warnings. The importer never follows embedded file paths or executes recorded commands.
 
+For a deliberately selected append-only logical stream, v0.4.0 also offers a
+separate one-shot write command. **Before its first successful import into an
+existing store, stop other writers and make a verified private backup.** That
+import upgrades the store to schema 3; v0.3.0 and older cannot open schema 3.
+
+```sh
+usage-lens import-rollout-incremental --db "$HOME/.usage-lens/usage.sqlite" \
+  --source local-records --file /absolute/path/to/supplied-records.jsonl \
+  --stream selected-rollout-1 \
+  --source-version a75987455a2879ca151cea5e118fa307be868583
+```
+
+Supply the path, source, logical stream ID and version every time. Each call
+boundedly rereads and reparses the complete newline-terminated prefix; this is
+not O(delta) tailing. Every unterminated tail is deferred, even valid JSON or
+partial UTF-8. A shorter file or changed committed prefix fails without changing
+records or progress. A byte-identical copied prefix can continue the same logical
+stream, but no physical-file identity is verified. Rotation requires an explicit
+new stream or source. The existing 8 MiB/256 KiB/20,000-line/1,000-record bounds
+are unchanged; this command cannot follow an unbounded file. See the full
+[incremental workflow and replay rules](docs/record-import.md#incremental-one-shot-workflow).
+It never watches, schedules, discovers files or reopens a remembered path.
+`import-rollout` keeps its snapshot behavior. When switching import modes, prefer
+a separate source because anonymous identities are not deduplicated across modes.
+
 The optional hook configuration in [the plugin package](plugin/usage-lens/README.md) observes supported future local events. It does not scan transcript directories or enable itself. Cloud-orchestrated Work does not support ordinary plugin hooks, and missing hooks are not evidence that no activity occurred.
 
 Skill metrics distinguish requested, read/loaded, and explicitly recorded invocation evidence. Pagination and resource reads are not new invocations. Instruction injection is not task success. Imported or forked histories can overlap; coverage and evidence categories must remain visible.
@@ -164,11 +189,11 @@ No model, success, unique-execution, or per-skill token attribution is inferred.
 
 The local `skills` evidence command is outside this conversational allowlist.
 The instruction-level allowlist is not an OS sandbox. Persisted queries open an
-existing schema-2 rollback-journal store read-only; normal v0.1.0, v0.1.1 and v0.2.0
-databases remain compatible without migration in v0.3.0. Queries fail rather than
-create or migrate a store. Incremental collection is deferred until stable
-identities, checkpoints, retention interaction and a schema-3 design are defined;
-this feature changes no collectors and installs no background process.
+existing schema-2 or schema-3 rollback-journal store read-only; normal older
+schema-2 databases remain query-compatible without migration in v0.4.0. Queries
+fail rather than create or migrate a store. Incremental import is a separate
+explicit write workflow, outside the Skill's eight-command allowlist and optional
+MCP tools. It does not install a background process or make collection automatic.
 
 ### Optional MCP
 

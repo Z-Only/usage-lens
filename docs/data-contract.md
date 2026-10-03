@@ -218,9 +218,8 @@ Coverage stays partial even for an empty result. Coverage and import warnings ar
 source-level context; filtering does not establish complete collection for the
 chosen window. Retention or deletion can reduce retained evidence without changing
 what historically happened. This query adds no collector, import, hook or retention
-behavior and makes no schema change. Incremental collection is explicitly deferred
-until stable identities, checkpoints, retention interaction and a schema-3 design
-are specified and independently reviewed.
+behavior and makes no schema change. The separate explicit incremental importer
+does not widen the conversational query allowlist or make collection automatic.
 
 ## Per-response token records
 
@@ -236,12 +235,63 @@ SQLite uses prepared statements, bounded inputs/queries, explicit migrations, at
 
 The dashboard binds only to loopback, validates Host/Origin and mutation requests, serves only embedded allowlisted assets, and never exposes arbitrary SQL or file paths.
 
-v0.3.0 does not change database schema 2; normal v0.1.0/v0.1.1/v0.2.0
-rollback-journal stores remain compatible. Conversational queries and selected-store doctor checks open
-existing supported stores read-only, without implicit creation or migration.
+v0.4.0 conversational queries and selected-store doctor checks accept schema-2
+and schema-3 rollback-journal stores read-only, without implicit creation or
+migration. Ordinary writable opens/new stores remain schema 2. The first
+successful explicit incremental import upgrades to schema 3 in the same atomic
+transaction as evidence, replay identities and checkpoint; failed parse/validation
+does not migrate. **Back up the closed store before that write. v0.3.0 and older
+cannot open schema 3.** Rollback needs a compatible copy of the pre-upgrade backup.
+
+### Incremental record ingestion
+
+`import-rollout-incremental --db ABS --source ID --file ABS --stream ID
+--source-version PINNED_COMMIT` is a one-shot write, separate from snapshot
+`import-rollout`, conversational Skill queries and optional MCP. Every invocation
+requires all explicit inputs. It boundedly rereads/reparses the complete
+newline-terminated prefix, not an O(delta) tail. Every unterminated tail is
+deferred, even valid JSON and partial UTF-8. There is no watcher, scheduler,
+directory/glob discovery, remembered-path reopen or embedded-path traversal.
+
+The checkpoint contains complete byte/physical-line counts, a SHA-256 prefix
+digest and parser/source-version metadata. A source-wide hashed identity ledger
+detects replay and immutable conflicts across calls/streams without retaining
+pending record bodies. Complete-prefix changes and truncation reject without
+mutation; byte-identical copied prefixes are accepted as the same caller-declared
+logical stream, without claiming physical-file identity. Rotation requires an
+explicit new stream or source. Compare-and-swap progress checks and a single
+transaction prevent stale concurrent commits and partial acceptance.
+
+Replay metadata survives retention and content-only deletion. Old prefixes cannot
+resurrect removed records or backfill old content after enabling capture. Explicit
+all-data deletion, with an optional source scope, resets the matching checkpoints
+and replay metadata. Schema 3 also records minimal replay tombstones for subsequent
+snapshot/event writes, but cannot reconstruct previously deleted pre-upgrade data.
+Snapshot anonymous file identities and incremental anonymous stream identities
+differ; use separate sources when switching modes if overlap is possible.
+
+The 8 MiB source, 256 KiB line, 20,000 physical-line and 1,000-event/response limits
+remain, alongside existing depth and projection caps. A new stream ID cannot
+exempt oversized input. At a bound, select another bounded logical file explicitly;
+no automatic rotation/splitting occurs. Evidence remains partial: no inferred skill
+invocation, success, complete history or per-skill token attribution. See
+[record import](record-import.md#incremental-one-shot-workflow) for the full contract.
 
 The plugin cannot collect, modify settings, delete records, or return stored bodies. Queries preserve provenance, freshness, missingness and imported coverage warnings.
 
 ## Verification limits
 
 Synthetic protocol and format tests establish behavior for their tested inputs. They do not verify the user's installed version, actual account access, completeness of saved history, startup side effects, or a real ChatGPT client connection. Those capabilities must be checked independently on the user's own machine; unsupported fields remain visibly unavailable.
+
+Incremental retention tombstones cover local event IDs and canonical
+`(sourceEventId, eventType)` aliases. Alternative local IDs may refer to the same
+immutable canonical evidence; accepting a zero-insert alias records replay
+protection for that ID too. An alias with different immutable metadata is a
+transaction-wide conflict. Content is never recovered through an alias after
+retention or a capture-setting change.
+
+Adoption of pre-incremental rows validates retained immutable metadata only.
+Unretained raw bodies (for example, capture-off imports) have no historical hash
+to compare and cannot be reconstructed; adoption never backfills their content.
+Raw-evidence conflict checks apply from the first accepted incremental digest
+onward, independent of subsequent capture settings.

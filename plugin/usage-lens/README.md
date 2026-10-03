@@ -70,8 +70,13 @@ paths and values for the actual host shell. Installing the instruction-only Skil
 does not grant local execution permissions. The local database must already have
 been created and populated through separately authorized workflows. The dashboard,
 hooks, imports, and collectors remain independent of conversational setup.
-Persisted queries require a schema-2 rollback-journal store; normal v0.1.0, v0.1.1 and v0.2.0 stores
-remain compatible without migration in v0.3.0. They fail rather than create or migrate a database. See the
+Persisted queries in v0.4.0 accept schema-2 and schema-3 rollback-journal stores,
+including normal older schema-2 stores, without migration. They fail rather than
+create or migrate a database. The separate `import-rollout-incremental` write is
+outside the Skill and MCP allowlists. Its first successful import upgrades to
+schema 3, which v0.3.0 and older cannot read; make a verified closed-store backup
+before that explicit workflow. It requires file/source/stream/version inputs each
+time and never watches, schedules, discovers files or reopens a remembered path. See the
 [query compatibility notes](../../docs/AI_INSTALL.md#supply-the-three-explicit-query-inputs)
 for safe handling of `storage_error` and `unsupported_schema`.
 

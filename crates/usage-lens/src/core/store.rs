@@ -1,3 +1,6 @@
+#[path = "incremental.rs"]
+mod incremental;
+
 #[path = "health.rs"]
 mod health;
 #[path = "skill_trends.rs"]
@@ -124,7 +127,7 @@ impl UsageStore {
     pub fn open(path: impl AsRef<Path>) -> CoreResult<Self> {
         Self::open_internal(path.as_ref(), None)
     }
-    /// Opens an existing current-schema store without initialization or migration.
+    /// Opens an existing schema-2 or schema-3 store without initialization or migration.
     /// Usage Lens uses rollback journaling. Reject externally WAL-converted files
     /// before SQLite can create sidecars; external concurrent journal-mode changes
     /// are unsupported. Keep normal locking so concurrent Usage Lens writes remain safe.
@@ -160,7 +163,7 @@ impl UsageStore {
             "PRAGMA query_only=ON; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=2000;",
         ))?;
         let version: i64 = safe(db.query_row("PRAGMA user_version", [], |row| row.get(0)))?;
-        if version != 2 {
+        if ![2, 3].contains(&version) {
             return Err(error("unsupported_schema"));
         }
         Ok(Self {
@@ -194,7 +197,7 @@ impl UsageStore {
         let _ = existed;
         safe(db.execute_batch("PRAGMA secure_delete=ON; PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; PRAGMA busy_timeout=2000;"))?;
         let version: i64 = safe(db.query_row("PRAGMA user_version", [], |row| row.get(0)))?;
-        if ![0, 1, 2].contains(&version) {
+        if ![0, 1, 2, 3].contains(&version) {
             return Err(error("unsupported_schema"));
         }
         let result = Self {
@@ -548,10 +551,12 @@ impl UsageStore {
         check_event_batch_size(inputs, RAW_BYTES)?;
         self.write(|| {self.capture_allowed()?;let prepared=inputs_array.iter().map(|v|self.prepare_event(v)).collect::<CoreResult<Vec<_>>>()?;let mut results=Vec::new();
             for (event,content,warnings) in prepared {
+                if self.retained_record_seen("event", &event)? {self.remember_retained_record("event", &event)?;results.push(json!({"inserted":false,"contentRetained":false,"warnings":["Previously observed identity suppressed by durable replay metadata."]}));continue;}
                 let existing:Option<String>=safe(self.db()?.query_row("SELECT event_id FROM events WHERE source_id=? AND (event_id=? OR (? IS NOT NULL AND source_event_id=? AND event_type=?)) LIMIT 1",params![s(&event["sourceId"]),s(&event["eventId"]),optional(&event["sourceEventId"]),optional(&event["sourceEventId"]),s(&event["eventType"])],|r|r.get(0)).optional())?;
-                if let Some(id)=existing {let retained:bool=safe(self.db()?.query_row("SELECT EXISTS(SELECT 1 FROM event_details WHERE source_id=? AND event_id=?)",params![s(&event["sourceId"]),id],|r|r.get(0)))?;results.push(json!({"inserted":false,"contentRetained":retained,"warnings":["Duplicate event identity ignored; the first observation was retained."]}));continue;}
+                if let Some(id)=existing {self.remember_retained_record("event", &event)?;let retained:bool=safe(self.db()?.query_row("SELECT EXISTS(SELECT 1 FROM event_details WHERE source_id=? AND event_id=?)",params![s(&event["sourceId"]),id],|r|r.get(0)))?;results.push(json!({"inserted":false,"contentRetained":retained,"warnings":["Duplicate event identity ignored; the first observation was retained."]}));continue;}
                 safe(self.db()?.execute("INSERT INTO events(source_id,event_id,source_event_id,event_type,observed_at,occurred_at,model,tool_name,skill_name,payload) VALUES(?,?,?,?,?,?,?,?,?,?)",params![s(&event["sourceId"]),s(&event["eventId"]),optional(&event["sourceEventId"]),s(&event["eventType"]),s(&event["observedAt"]),optional(&event["occurredAt"]),optional(&event["model"]),optional(&event["toolName"]),optional(&event["skillName"]),event.to_string()]))?;
                 if let Some(ref value)=content {safe(self.db()?.execute("INSERT INTO event_details(source_id,event_id,payload) VALUES(?,?,?)",params![s(&event["sourceId"]),s(&event["eventId"]),value.to_string()]))?;}
+                self.remember_retained_record("event", &event)?;
                 results.push(json!({"inserted":true,"contentRetained":content.is_some(),"warnings":warnings}));
             } Ok(Value::Array(results))})
     }
@@ -561,10 +566,10 @@ impl UsageStore {
             return Err(error("imported_source_required"));
         }
         let value = normalize_response_token(input)?;
-        self.write(||{self.capture_allowed()?;let prior:Option<String>=safe(self.db()?.query_row("SELECT payload FROM response_tokens WHERE source_id=? AND thread_id=? AND session_id=? AND response_id=?",params![s(&source["id"]),s(&value["threadId"]),s(&value["sessionId"]),s(&value["responseId"])],|r|r.get(0)).optional())?;
+        self.write(||{self.capture_allowed()?;if self.retained_record_seen("response", &value)? {return Ok(json!({"inserted":false}));}let prior:Option<String>=safe(self.db()?.query_row("SELECT payload FROM response_tokens WHERE source_id=? AND thread_id=? AND session_id=? AND response_id=?",params![s(&source["id"]),s(&value["threadId"]),s(&value["sessionId"]),s(&value["responseId"])],|r|r.get(0)).optional())?;
             if let Some(prior)=prior{if immutable_response(&parse(prior)?)!=immutable_response(&value){return Err(error("response_token_conflict"));}return Ok(json!({"inserted":false}));}
             let t=&value["usage"];
-            safe(self.db()?.execute("INSERT INTO response_tokens(source_id,thread_id,session_id,response_id,imported_at,occurred_at,model,input_tokens,cached_input_tokens,cache_write_input_tokens,output_tokens,reasoning_output_tokens,total_tokens,payload) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",params![s(&source["id"]),s(&value["threadId"]),s(&value["sessionId"]),s(&value["responseId"]),s(&value["importedAt"]),optional(&value["occurredAt"]),optional(&value["model"]),s(&t["inputTokens"]),s(&t["cachedInputTokens"]),s(&t["cacheWriteInputTokens"]),s(&t["outputTokens"]),s(&t["reasoningOutputTokens"]),s(&t["totalTokens"]),value.to_string()]))?;Ok(json!({"inserted":true}))})
+            safe(self.db()?.execute("INSERT INTO response_tokens(source_id,thread_id,session_id,response_id,imported_at,occurred_at,model,input_tokens,cached_input_tokens,cache_write_input_tokens,output_tokens,reasoning_output_tokens,total_tokens,payload) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",params![s(&source["id"]),s(&value["threadId"]),s(&value["sessionId"]),s(&value["responseId"]),s(&value["importedAt"]),optional(&value["occurredAt"]),optional(&value["model"]),s(&t["inputTokens"]),s(&t["cachedInputTokens"]),s(&t["cacheWriteInputTokens"]),s(&t["outputTokens"]),s(&t["reasoningOutputTokens"]),s(&t["totalTokens"]),value.to_string()]))?;self.remember_retained_record("response", &value)?;Ok(json!({"inserted":true}))})
     }
     pub fn import_data(&self, input: &Value) -> CoreResult<Value> {
         exact_keys(
@@ -661,6 +666,18 @@ impl UsageStore {
                     params![id, id],
                 ))?;
                 result[key] = json!(n.to_string());
+            }
+            if self.has_incremental_schema()? {
+                for table in [
+                    "rollout_checkpoints",
+                    "rollout_replays",
+                    "record_tombstones",
+                ] {
+                    safe(self.db()?.execute(
+                        &format!("DELETE FROM {table} WHERE (? IS NULL OR source_id=?)"),
+                        params![id, id],
+                    ))?;
+                }
             }
             Ok(result)
         })
@@ -834,7 +851,7 @@ impl UsageStore {
             );
         }
         Ok(
-            json!({"responseTokenCount":self.count_table("response_tokens")?,"schemaVersion":2,"settings":self.get_settings()?,"sources":sources,"capabilities":capabilities,"observationCount":self.count_table("observations")?,"eventCount":self.count_table("events")?,"warnings":warnings}),
+            json!({"responseTokenCount":self.count_table("response_tokens")?,"schemaVersion":safe(self.db()?.query_row("PRAGMA user_version", [], |r|r.get::<_,i64>(0)))?,"settings":self.get_settings()?,"sources":sources,"capabilities":capabilities,"observationCount":self.count_table("observations")?,"eventCount":self.count_table("events")?,"warnings":warnings}),
         )
     }
     fn groups<P: rusqlite::Params>(&self, sql: &str, params: P) -> CoreResult<Vec<Value>> {

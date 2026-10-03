@@ -6,6 +6,30 @@ Releases group useful features and fixes. Merging a PR does not automatically cr
 
 Further changes will be grouped here until a meaningful release is ready.
 
+## [0.4.0] - 2026-10-03
+
+Incremental-record-import release preparation. This entry does not publish a
+release; exact-commit gates and extracted-artifact verification remain required.
+
+### Added
+
+- Explicit one-shot `import-rollout-incremental` with a caller-selected absolute file, source, logical stream ID and pinned source version on every invocation
+- Bounded reread/reparse of the complete prefix with newline-boundary checkpoints; every unterminated tail is deferred, including complete JSON and partial UTF-8
+- Atomic evidence, source-wide hashed replay identities and progress commits with compare-and-swap checks; changed committed prefixes, truncation and immutable identity conflicts reject the entire incremental import
+- Replay protection across retention and content deletion, without retaining pending record bodies or restoring old content when capture is later enabled
+- Synthetic incremental append, no-op, truncation and read-only schema compatibility checks in packaged-artifact smoke
+
+### Compatibility and safety
+
+- **Back up a closed existing store before its first incremental import.** A successful explicit incremental import transaction upgrades schema 2 to schema 3. Failed parsing/validation does not migrate; ordinary writable opens and new stores remain schema 2 until that upgrade
+- v0.4.0 read-only queries accept schema 2 and 3 without migration. **v0.3.0 and older cannot read schema 3.** Binary-only rollback is unsafe; use a separate compatible copy of the verified pre-upgrade backup
+- Existing snapshot `import-rollout` behavior and conversational eight-command/tool allowlists remain unchanged. Use a separate source when switching modes if anonymous records may overlap; no cross-mode anonymous-identity deduplication is claimed
+- Existing 8 MiB source, 256 KiB line, 20,000-line and 1,000-event/response bounds remain. This is not O(delta) tailing, a watcher, scheduler, directory/glob collector or remembered-path reopen mechanism
+- Logical streams accept byte-identical copied prefixes without claiming physical-file identity. Rotation/truncation requires an explicit new stream or source; no automatic reset occurs
+- Retention/content deletion preserve replay metadata; explicit delete-all or source-scoped delete-all resets it. Already-deleted pre-upgrade history cannot be reconstructed
+- Imported skill reads/injections are evidence, not invented invocations, successes or per-skill token attribution. Real client, account, hook, macOS and background-daemon operation are not established by synthetic tests
+- See [record import](docs/record-import.md), [upgrade guidance](docs/AI_INSTALL.md#upgrade-rollback-and-uninstall) and [verification notes](docs/verification.md)
+
 ## [0.3.0] - 2026-10-03
 
 Skill-evidence-trends release preparation. A version entry does not publish a

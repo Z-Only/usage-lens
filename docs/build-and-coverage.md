@@ -17,6 +17,11 @@ Run `bash scripts/ci_gate.sh` with the pinned tools installed. CI passes the exa
 
 The gate runs build-script/gate regression tests, source guardrails, formatting, warning-free native and WASM Clippy, native backend and Leptos SSR/shared-state tests with LLVM instrumentation, and a combined LCOV total/changed-line check. Both total production line coverage and changed production line coverage must reach 95%, without rounding. Tests and generated dependency output do not pad that denominator. The earlier TypeScript prototype is not accepted as evidence for Rust coverage.
 
+The static check also compares an explicit inventory of owned product versions:
+both Cargo packages, their Cargo.lock records, package.json and the plugin manifest.
+It does not require unrelated dependency versions or stable adapter identities to
+match the product release.
+
 Every crate `src/**/*.rs` file is inventoried, including all CLI/main/worker/server entrypoints. All authored browser JavaScript under the UI public directory is also inventoried. Ordinary missing LCOV records fail the gate, even for unchanged files. A missing Rust file can be treated as zero-executable only when its contents match a deliberately narrow grammar of module declarations/reexports, comments, explicit WASM module cfgs, and compile-only recursion-limit metadata; filename alone never grants an exception. Build scripts and dedicated integration-test directories are build/test code, not end-user runtime source.
 
 ## WebAssembly measurement limitation
