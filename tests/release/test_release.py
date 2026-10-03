@@ -4,12 +4,15 @@ import hashlib
 import io
 import json
 import os
+import posixpath
+import re
 import sys
 import tarfile
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import unquote, urlsplit
 
 SCRIPTS = Path(__file__).resolve().parents[2] / "scripts/release"
 sys.path.insert(0, str(SCRIPTS))
@@ -97,6 +100,43 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(member.uid, 0)
                 self.assertEqual(member.mtime, 0)
                 self.assertNotIn("private", member.name)
+
+    def test_message_reading_guide_and_bundled_references_resolve_in_every_platform_archive(self):
+        guide = "docs/message-reading.md"
+        referring_docs = {"README.md", "CHANGELOG.md", "docs/data-contract.md", "docs/verification.md"}
+        self.assertIn(guide, FILES, "The linked user guide must be explicitly reviewed for packaging")
+        checkout = SCRIPTS.parents[1]
+        for name in referring_docs | {guide}:
+            (self.root / name).write_bytes((checkout / name).read_bytes())
+        guide_bytes = (checkout / guide).read_bytes()
+        for target in TARGETS:
+            with self.subTest(target=target):
+                archive, manifest = self.build(target)
+                verify_archive(archive, manifest)
+                prefix = asset_base(VERSION, target) + "/"
+                with tarfile.open(archive, "r:gz") as tar:
+                    bundled = {member.name.removeprefix(prefix): tar.extractfile(member).read() for member in tar}
+                self.assertEqual(bundled[guide], guide_bytes)
+                self.assertEqual(manifest["files"][guide], hashlib.sha256(guide_bytes).hexdigest())
+                resolved_from = set()
+                for name in referring_docs:
+                    # These reviewed docs use ordinary inline Markdown links.
+                    # Scope this regression to the new guide, not unrelated
+                    # pre-existing relative links outside FILES.
+                    for destination in re.findall(r"\[[^\]]*\]\(([^)]+)\)", bundled[name].decode("utf-8")):
+                        url = urlsplit(destination)
+                        if url.scheme or url.netloc or not url.path:
+                            continue
+                        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), unquote(url.path)))
+                        if resolved == guide:
+                            self.assertIn(resolved, bundled, f"Broken bundled reference in {name}")
+                            resolved_from.add(name)
+                self.assertEqual(resolved_from, referring_docs)
+
+    def test_missing_message_reading_guide_blocks_packaging(self):
+        (self.root / "docs/message-reading.md").unlink()
+        with self.assertRaisesRegex(ValueError, "Missing or linked allowlisted input: docs/message-reading.md"):
+            self.build()
 
     def test_windows_binary_filename(self):
         archive, manifest = self.build("windows-x64")
