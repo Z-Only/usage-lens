@@ -43,7 +43,17 @@ pub fn import_incremental_rollout(
     }
     let mut parser_options = options.clone();
     parser_options["captureContent"] = store.get_settings()?["contentCaptureEnabled"].clone();
-    let mut parsed = rollout::parse_incremental_rollout(bytes, &parser_options)?;
+    // The one-shot import exposes one stable conflict code across parser and store checks.
+    // Keep the lower-level parser and snapshot import's more specific contracts unchanged.
+    let mut parsed = rollout::parse_incremental_rollout(bytes, &parser_options).map_err(
+        |error| match error.0 {
+            "rollout_conflicting_event_identity"
+            | "rollout_conflicting_response_identity"
+            | "rollout_conflicting_call_identity"
+            | "rollout_conflicting_output_identity" => AdapterError("rollout_identity_conflict"),
+            _ => error,
+        },
+    )?;
     parsed["expectedCheckpoint"] = expected;
     parsed["importedAt"] = options["observedAt"].clone();
     store

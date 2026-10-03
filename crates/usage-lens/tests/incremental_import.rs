@@ -716,3 +716,102 @@ fn preincremental_capture_off_adoption_checks_metadata_without_inventing_old_bod
         "rollout_identity_conflict"
     );
 }
+
+#[test]
+fn incremental_import_normalizes_only_identity_conflicts_without_changing_snapshot_contracts() {
+    let mut changed_call = call();
+    changed_call["payload"]["arguments"] = json!("{\"package\":\"skill://synthetic/changed\"}");
+    let mut changed_output = output();
+    changed_output["payload"]["output"] = json!("changed output");
+    let cases = [
+        (
+            message("duplicate", "one"),
+            message("duplicate", "two"),
+            "rollout_conflicting_event_identity",
+        ),
+        (token(2), token(3), "rollout_conflicting_response_identity"),
+        (call(), changed_call, "rollout_conflicting_call_identity"),
+        (
+            output(),
+            changed_output,
+            "rollout_conflicting_output_identity",
+        ),
+    ];
+    for (first, second, parser_error) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.sqlite");
+        let file = dir.path().join("synthetic.jsonl");
+        let store = UsageStore::open(&path).unwrap();
+        source(&store);
+        let data = bytes(&[meta(), first, second]);
+        let mut parser_options = options("stream");
+        parser_options["captureContent"] = json!(false);
+        assert_eq!(
+            parse_incremental_rollout(&data, &parser_options)
+                .unwrap_err()
+                .0,
+            parser_error
+        );
+        let snapshot = usage_lens::adapters::rollout::parse_rollout(&data, &parser_options);
+        if parser_error == "rollout_conflicting_event_identity" {
+            // Snapshot message projection deliberately preserves its existing last-wins behavior.
+            assert_eq!(snapshot.unwrap()["events"].as_array().unwrap().len(), 1);
+        } else {
+            assert_eq!(snapshot.unwrap_err().0, parser_error);
+        }
+        assert_eq!(
+            import_incremental_rollout(&store, &data, &options("stream"))
+                .unwrap_err()
+                .0,
+            "rollout_identity_conflict"
+        );
+        assert_eq!(db_version(&path), 2);
+        assert_eq!(checkpoint(&store, "stream"), Value::Null);
+        fs::write(&file, &data).unwrap();
+        let result = Command::new(env!("CARGO_BIN_EXE_usage-lens"))
+            .args([
+                "import-rollout-incremental",
+                "--db",
+                path.to_str().unwrap(),
+                "--source",
+                "synthetic",
+                "--file",
+                file.to_str().unwrap(),
+                "--stream",
+                "stream",
+                "--source-version",
+                ROLLOUT_SOURCE_VERSION,
+            ])
+            .output()
+            .unwrap();
+        assert!(!result.status.success());
+        assert!(result.stdout.is_empty());
+        assert_eq!(
+            String::from_utf8(result.stderr).unwrap(),
+            "Usage Lens: rollout_identity_conflict\n"
+        );
+        // The same conflict appended after an accepted checkpoint also leaves progress untouched.
+        import(&store, &[meta()], "stream");
+        let before = checkpoint(&store, "stream");
+        assert_eq!(
+            import_incremental_rollout(&store, &data, &options("stream"))
+                .unwrap_err()
+                .0,
+            "rollout_identity_conflict"
+        );
+        assert_eq!(checkpoint(&store, "stream"), before);
+        assert!(events(&store).is_empty());
+    }
+    let store = store();
+    for (data, code) in [
+        (b"{bad}\n".as_slice(), "rollout_invalid_json"),
+        (b"\xff\n".as_slice(), "rollout_invalid_utf8"),
+    ] {
+        assert_eq!(
+            import_incremental_rollout(&store, data, &options("other"))
+                .unwrap_err()
+                .0,
+            code
+        );
+    }
+}
