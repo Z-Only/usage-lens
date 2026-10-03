@@ -101,3 +101,16 @@ artifact smoke must exercise diagnostics, health and the eighth MCP tool.
 
 New dashboard health-card layout and interaction checks require the actual v0.2.0
 browser run; old screenshots cannot establish the changed UI's rendered behavior.
+
+
+### Health screenshot capture correction
+
+The initial PR browser run at commit
+`72432921517b7497e725834cf2e8821620c23ab2` passed its nine synthetic checks. Review of its mobile health-panel
+screenshots found a capture artifact: cropping a panel taller than the viewport
+could reposition the unfocused fixed skip link into the image, even though the
+link was above the real viewport. The follow-up changes only test capture to
+full-page screenshots, attaches successful offscreen skip-link geometry, and adds
+an isolated keyboard Tab/Enter check for visible focus and navigation to main
+content. Application CSS is unchanged. The follow-up's actual browser execution
+and corrected screenshot review remain requirements of its exact-commit CI.
