@@ -47,7 +47,10 @@ async function captureProjection(page: Page, dialog: Locator, heading: string, v
   await expect(body).toContainText('"projection": "visible_text_only"');
   await expect(body).toContainText(visibleText);
   await section.scrollIntoViewIfNeeded();
-  await body.scrollIntoViewIfNeeded();
+  // Minimal scrolling can leave a fractional bottom border on the viewport edge.
+  // Center the body before demanding full intersection; do not relax the ratio
+  // or the separate rendered-text and drawer-containment assertions below.
+  await body.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" }));
   try {
     await expect(body).toBeInViewport({ ratio: 1 });
     await expect.poll(() => body.evaluate((element, expectedText) => {
