@@ -2,6 +2,7 @@
 use crate::event_bridge;
 use crate::model::Action;
 use crate::model::*;
+use crate::reading::*;
 use leptos::prelude::*;
 use serde_json::Value;
 
@@ -431,6 +432,7 @@ pub fn overview_view(s: &State, ui: Ui) -> AnyView {
         </div>
         {(o["source"]["mode"] == "imported").then(|| imported(s, ui))}
         <div class="overview-grid">{chart(s, ui)}{quota_panel(&o["quota"], false, l)}</div>
+        {activity_breakdown(s, ui)}
         <section class="panel">
             <div class="section-heading">
                 <h2>{l.text("Recent activity", "最近活动")}</h2>
@@ -816,6 +818,7 @@ pub fn quota_panel(o: &Value, full: bool, l: Language) -> AnyView {
                             </div>
                             {if !v.is_null() {
                                 view! {
+                                    {(reported(&v["windowDurationMins"]).as_str() == Some("10080")).then(|| view! { <span class="state-label weekly-label">{l.text("Reported weekly window", "报告的每周窗口")}</span> })}
                                     <div class="quota-value">
                                         <span>
                                             {cell_text(&v["windowDurationMins"])}" "
@@ -973,7 +976,7 @@ pub fn evidence(events: &[Value], l: Language, ui: Ui) -> AnyView {
                                             })}
                                     </td>
                                     <td>{display_value(&e["model"], l)}</td>
-                                    <td class="capitalize">{label(&e["eventType"])}</td>
+                                    <td>{event_name(&e["eventType"], l)}</td>
                                     <td class="muted capitalize small">
                                         {label(&e["evidenceType"])}
                                         {(!e["skillEvidenceKind"].is_null())
@@ -1005,6 +1008,7 @@ pub fn evidence(events: &[Value], l: Language, ui: Ui) -> AnyView {
 }
 pub fn remote_notice(s: &State, slot: Slot, ui: Ui) -> AnyView {
     let l = s.language;
+    let retry = s.retry_action(slot);
     view! {
         {(!s.error(slot).is_empty())
             .then(|| {
@@ -1013,7 +1017,7 @@ pub fn remote_notice(s: &State, slot: Slot, ui: Ui) -> AnyView {
                         {s.error(slot).to_owned()}
                         <Button
                             ui
-                            action=Action::Load(slot, false)
+                            action=retry
                             text=l.text("Retry", "重试")
                             class="text-button"
                         />
@@ -1063,6 +1067,12 @@ pub fn activity(s: &State, ui: Ui) -> AnyView {
                     )}
             </p>
             <form class="filters" on:submit=event_bridge::prevent(ui, Action::ApplyFilters)>
+                <label class="content-query-filter">
+                    {l.text("Search retained content", "搜索保留内容")}
+                    <input type="search" name="query" maxlength="200" prop:value=s.filters.content_query.clone()
+                        placeholder=l.text("Exact text · local content only", "精确文本 · 仅本地内容")
+                        on:input=event_bridge::value(ui, InputAction::Filter("query")) />
+                </label>
                 <label>
                     {l.text("From", "开始日期")}
                     <input
@@ -1082,8 +1092,9 @@ pub fn activity(s: &State, ui: Ui) -> AnyView {
                     />
                 </label>
                 <label>
-                    {l.text("Event type", "事件类型")}
+                    <span id="activity-event-type-label">{l.text("Event type", "事件类型")}</span>
                     <select
+                        aria-labelledby="activity-event-type-label"
                         name="eventType"
                         prop:value=s.filters.event_type.clone()
                         on:change=event_bridge::value(ui, InputAction::Filter("eventType"))
@@ -1122,6 +1133,7 @@ pub fn activity(s: &State, ui: Ui) -> AnyView {
                         "筛选依据已记录时间戳，不推测来源时区。",
                     )}
             </p>
+            {search_scope(s)}
             {remote_notice(s, Slot::Activity, ui)}
             {(!s.data(Slot::Activity).is_null())
                 .then(|| evidence(&rows(&s.data(Slot::Activity)["events"]), l, ui))}
@@ -1364,6 +1376,7 @@ pub fn quotas(s: &State, ui: Ui) -> AnyView {
     let observations = rows(&history["observations"]);
     view! {
         {quota_panel(&s.data(Slot::Overview)["quota"], true, l)}
+        {crate::token_period::token_period_panel(s, ui)}
         <section class="panel">
             <div class="section-heading">
                 <h2>{l.text("Snapshot history", "快照历史")}</h2>
@@ -2133,43 +2146,11 @@ pub fn event_detail(s: &State, ui: Ui) -> AnyView {
                         "内容仅限本地。插件查询不会接收消息正文。",
                     )}
             </p>
-            <dl class="detail-list">
-                {fields
-                    .into_iter()
-                    .map(|(k, v)| {
-                        view! {
-                            <dt>{k}</dt>
-                            <dd class="mono">{display_value(&v, l)}</dd>
-                        }
-                    })
-                    .collect_view()}
-            </dl>
             {remote_notice(s, Slot::Detail, ui)}
             {(!d.is_null())
                 .then(|| {
                     view! {
-                        <h3>{l.text("Retained content", "保留内容")}</h3>
-                        {(d["contentRetained"] != true)
-                            .then(|| {
-                                view! {
-                                    <p class="muted">
-                                        {l
-                                            .text(
-                                                "Content was not retained, is unavailable, or has been deleted.",
-                                                "内容未保留、不可用或已删除。",
-                                            )}
-                                    </p>
-                                }
-                            })}
-                        {(!d["content"].is_null())
-                            .then(|| {
-                                view! {
-                                    <pre class="content-body" tabindex="0">
-                                        {serde_json::to_string_pretty(&d["content"])
-                                            .unwrap_or_default()}
-                                    </pre>
-                                }
-                            })}
+                        {retained_content(d, l)}
                         {rows(&d["warnings"])
                             .into_iter()
                             .map(|w| view! { <p class="footnote">{string(&w).to_owned()}</p> })
@@ -2183,6 +2164,12 @@ pub fn event_detail(s: &State, ui: Ui) -> AnyView {
                         </p>
                     }
                 })}
+            {event_context(&s.selected, l)}
+            <details class="data-details event-metadata"><summary>{l.text("Recorded metadata", "已记录元数据")}</summary>
+                <dl class="detail-list">
+                    {fields.into_iter().map(|(k, v)| view! { <dt>{k}</dt><dd class="mono">{display_value(&v, l)}</dd> }).collect_view()}
+                </dl>
+            </details>
         </dialog>
     }.into_any()
 }

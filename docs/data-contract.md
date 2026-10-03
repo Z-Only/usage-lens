@@ -295,3 +295,13 @@ Unretained raw bodies (for example, capture-off imports) have no historical hash
 to compare and cannot be reconstructed; adoption never backfills their content.
 Raw-evidence conflict checks apply from the first accepted incremental digest
 onward, independent of subsequent capture settings.
+
+## v0.5 local reading queries
+
+The local-only retained-content search now supports bounded cursor pagination and
+metadata filters, returning event metadata only. The additive
+`GET /api/response-tokens/period` requires explicit UTC dates and excludes all
+responses without `occurredAt`; it does not reuse the older response summary's
+import-time fallback. These local HTTP surfaces do not expand the conversational
+Skill/MCP allowlists. Full fields, bounds, ordering and scope are documented in
+[message reading](message-reading.md). No schema migration is required.

@@ -1545,3 +1545,37 @@ dialog.confirm-dialog { max-height: calc(100dvh - 32px); overflow: auto; }
   .skill-trends .filters .skill-name-filter { width: 100%; }
   .skill-trend-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* Local record explorer and escaped-text message reader. */
+.activity-breakdown { margin-bottom: 24px; }
+.activity-breakdown > .muted { font-size: 13px; }
+.breakdown-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px; }
+.breakdown-grid h3 { font-size: 12px; color: var(--muted); margin: 20px 0 10px; }
+.breakdown-list { list-style: none; padding: 0; margin: 0; }
+.breakdown-link { display: flex; width: 100%; gap: 16px; justify-content: space-between; align-items: center; padding: 11px 0; border: 0; border-bottom: 1px solid var(--border); color: var(--text); background: transparent; text-align: left; font: inherit; font-size: 12px; }
+.breakdown-link span { overflow-wrap: anywhere; min-width: 0; }
+button.breakdown-link:hover { color: var(--accent); }
+.breakdown-link.unknown { color: var(--muted); }
+.filters .content-query-filter { flex: 1 0 100%; }
+.filters .content-query-filter input { width: 100%; max-width: 100%; }
+.search-scope, .transmission-evidence { display: block; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.search-scope > span, .search-scope > strong { display: block; margin: 4px 0; }
+.transmission-evidence p { margin: 8px 0 0; }
+.reader-context h3 { margin: 0; font-size: 16px; }
+.reader-context { margin: 24px 0; }
+.message-reader { margin-top: 28px; }
+.message-reader > h3 { font-size: 17px; }
+.reader-section { margin: 22px 0; }
+.reader-section h3 { font-size: 12px; color: var(--muted); }
+.reader-section .content-body { line-height: 1.7; max-height: 55vh; overflow: auto; }
+.reader-empty { padding: 18px; border: 1px dashed var(--border); border-radius: 8px; font-size: 12px; line-height: 1.7; color: var(--muted); }
+.reader-empty strong { color: var(--text); }
+.retained-file, .retained-json, .event-metadata { font-size: 12px; margin: 18px 0; }
+@media (max-width: 760px) {
+  .breakdown-grid { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .filters .content-query-filter { width: 100%; }
+}
+.weekly-label { display: inline-block; margin: 10px 0 0; }
+.token-period { margin-top: 24px; margin-bottom: 24px; }
+.token-period > .muted { font-size: 13px; line-height: 1.7; }
+.token-period .notice { display: block; font-size: 12px; line-height: 1.7; }
+.token-period .attribution-unknown { margin: 22px 0; }

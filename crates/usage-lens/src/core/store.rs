@@ -3,8 +3,12 @@ mod incremental;
 
 #[path = "health.rs"]
 mod health;
+#[path = "local_search.rs"]
+mod local_search;
 #[path = "skill_trends.rs"]
 mod skill_trends;
+#[path = "token_period.rs"]
+mod token_period;
 
 use super::{
     normalize::{count, normalize_account, normalize_rate_limits, normalize_usage},
@@ -631,19 +635,6 @@ impl UsageStore {
         let (event, content) = row.ok_or_else(|| error("event_not_found"))?;
         Ok(
             json!({"event":parse(event)?,"content":content.clone().map(parse).transpose()?,"contentRetained":content.is_some(),"warnings":[if content.is_some(){CONTENT_WARNING}else{"No local content was retained for this event."}]}),
-        )
-    }
-    pub fn search_local_details(&self, input: &Value) -> CoreResult<Value> {
-        self.read(|| self.search_local_details_impl(input))
-    }
-    fn search_local_details_impl(&self, input: &Value) -> CoreResult<Value> {
-        exact_keys(input, &["sourceId", "query", "limit"])?;
-        let source = self.source(&input["sourceId"])?;
-        let query = bounded_text(&input["query"], 200)?;
-        let limit = limit(input)?;
-        let events=self.json_rows("SELECT payload FROM (SELECT e.payload AS payload,d.payload AS content FROM events e JOIN event_details d ON e.source_id=d.source_id AND e.event_id=d.event_id WHERE e.source_id=? ORDER BY e.observed_at DESC,e.event_id DESC LIMIT 10000) WHERE instr(content,?)>0 LIMIT ?",params![s(&source["id"]),query,limit])?;
-        Ok(
-            json!({"events":events,"coverage":coverage(),"warnings":[CONTENT_WARNING,"Search examines at most the 10,000 most recently observed retained, redacted local content records. Results are capped."]}),
         )
     }
     pub fn clear_data(&self, input: &Value) -> CoreResult<Value> {

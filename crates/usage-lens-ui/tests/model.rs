@@ -754,3 +754,186 @@ fn editing_invalid_dates_clears_previous_trend_and_preserves_activity_filters() 
     );
     assert!(s.data(Slot::SkillSummary).is_null());
 }
+
+#[test]
+fn content_search_uses_applied_filters_for_pagination_and_rejects_late_results() {
+    let mut s = loaded();
+    s.dispatch(Action::Navigate(Page::Activity));
+    s.dispatch(Action::Filter("query", "literal & 中文".into()));
+    s.dispatch(Action::Filter("model", "model-a".into()));
+    let search = s.dispatch(Action::ApplyFilters).remove(0);
+    assert!(search.path.starts_with("/api/events/search?"));
+    assert!(
+        search
+            .path
+            .contains("query=literal%20%26%20%E4%B8%AD%E6%96%87")
+    );
+    let mut result = fixture("events");
+    result["nextCursor"] = json!("search cursor");
+    s.complete(&search, Ok(result.clone()));
+    s.dispatch(Action::Filter("query", "draft new search".into()));
+    s.dispatch(Action::Filter("model", "draft-model".into()));
+    let next = s.dispatch(Action::Load(Slot::Activity, true)).remove(0);
+    assert!(next.path.contains("model=model-a"));
+    assert!(!next.path.contains("draft"));
+    assert!(next.path.contains("cursor=search%20cursor"));
+    let changed = s.dispatch(Action::ApplyFilters).remove(0);
+    assert!(!s.accepts(&next));
+    assert!(s.data(Slot::Activity).is_null());
+    s.complete(&next, Ok(result));
+    assert!(s.data(Slot::Activity).is_null());
+    assert!(changed.path.contains("query=draft%20new%20search"));
+    let reset = s.dispatch(Action::ResetFilters).remove(0);
+    assert!(reset.path.starts_with("/api/events?"));
+    assert_eq!(s.applied_filters, Filters::default());
+    assert!(!s.accepts(&changed));
+}
+
+#[test]
+fn aggregate_drilldown_resets_unrelated_scope_and_only_fetches_explicit_groups() {
+    let mut s = loaded();
+    s.filters.from = "2026-10-01".into();
+    s.filters.content_query = "previous".into();
+    s.selected = fixture("event");
+    for (field, value) in [("eventType", "tool_call"), ("model", "model-a")] {
+        let r = s.dispatch(Action::Drilldown(field, value.into())).remove(0);
+        assert_eq!(s.page, Page::Activity);
+        assert!(s.selected.is_null());
+        assert!(r.path.contains(&format!("{field}={value}")));
+        assert!(!r.path.contains("query="));
+        assert!(!r.path.contains("fromDate="));
+        assert!(!r.path.contains("cursor="));
+    }
+    for action in [
+        Action::Drilldown("model", "".into()),
+        Action::Drilldown("unsupported", "value".into()),
+    ] {
+        assert!(s.dispatch(action).is_empty());
+    }
+    let mut empty = State::default();
+    for action in [
+        Action::Drilldown("model", "a".into()),
+        Action::ApplyFilters,
+        Action::ResetFilters,
+        Action::ApplyTokenPeriod,
+    ] {
+        assert!(empty.dispatch(action).is_empty());
+    }
+    s.dispatch(Action::SaveSettings);
+    assert!(
+        s.dispatch(Action::Drilldown("model", "a".into()))
+            .is_empty()
+    );
+}
+
+#[test]
+fn invalid_activity_submission_invalidates_inflight_results() {
+    let mut s = loaded();
+    let r = s.dispatch(Action::ApplyFilters).remove(0);
+    s.dispatch(Action::Filter("from", "2026-10-03".into()));
+    s.dispatch(Action::Filter("to", "2026-10-01".into()));
+    assert!(s.dispatch(Action::ApplyFilters).is_empty());
+    assert!(!s.accepts(&r));
+}
+
+#[test]
+fn token_period_dates_are_explicit_separate_and_match_response_scope() {
+    let mut s = loaded();
+    assert!(
+        s.dispatch(Action::Load(Slot::TokenPeriod, false))
+            .is_empty()
+    );
+    assert_eq!(s.error(Slot::TokenPeriod), "invalid_token_period");
+    assert!(s.dispatch(Action::ApplyTokenPeriod).is_empty());
+    s.dispatch(Action::Filter("tokenFrom", "2026-10-01".into()));
+    s.dispatch(Action::Filter("tokenTo", "2026-10-03".into()));
+    assert!(s.filters.from.is_empty());
+    let r = s.dispatch(Action::ApplyTokenPeriod).remove(0);
+    assert!(r.path.starts_with("/api/response-tokens/period?"));
+    assert!(r.path.contains("fromDate=2026-10-01&toDate=2026-10-03"));
+    s.dispatch(Action::Filter("tokenFrom", "2026-10-02".into()));
+    let result = json!({"source":{"id":"demo"},"fromDate":"2026-10-01","toDate":"2026-10-03","responseCount":"0"});
+    s.complete(&r, Ok(result.clone()));
+    assert_eq!(s.data(Slot::TokenPeriod)["fromDate"], "2026-10-01");
+    let retry = s.dispatch(Action::Load(Slot::TokenPeriod, false)).remove(0);
+    assert_eq!(retry.path, r.path);
+    let mut wrong = result;
+    wrong["toDate"] = json!("2026-10-04");
+    s.complete(&retry, Ok(wrong));
+    assert_eq!(s.error(Slot::TokenPeriod), "filter_mismatch");
+    let jobs = s.dispatch(Action::Navigate(Page::Quotas));
+    assert_eq!(jobs.len(), 2);
+    assert_eq!(jobs[1].slot, Slot::TokenPeriod);
+    assert!(jobs[1].path.contains("fromDate=2026-10-01"));
+    s.dispatch(Action::Filter("tokenTo", "2026-01-01".into()));
+    assert!(s.dispatch(Action::ApplyTokenPeriod).is_empty());
+    assert!(s.data(Slot::TokenPeriod).is_null());
+}
+
+#[test]
+fn validation_error_retry_revalidates_drafts_instead_of_reloading_older_evidence() {
+    let mut s = loaded();
+    let r = s.dispatch(Action::ApplyFilters).remove(0);
+    s.complete(&r, Ok(fixture("events")));
+    s.dispatch(Action::Filter("from", "2026-10-03".into()));
+    s.dispatch(Action::Filter("to", "2026-10-01".into()));
+    s.dispatch(Action::ApplyFilters);
+    assert!(s.dispatch(s.retry_action(Slot::Activity)).is_empty());
+    assert_eq!(s.error(Slot::Activity), "invalid_date_range");
+    assert!(s.data(Slot::Activity).is_null());
+    s.dispatch(Action::Filter("to", "2026-10-03".into()));
+    let retry = s.dispatch(s.retry_action(Slot::Activity)).remove(0);
+    assert!(retry.path.contains("fromDate=2026-10-03&toDate=2026-10-03"));
+    s.dispatch(Action::Filter("tokenFrom", "2026-10-01".into()));
+    s.dispatch(Action::Filter("tokenTo", "2026-10-03".into()));
+    s.dispatch(Action::ApplyTokenPeriod);
+    s.dispatch(Action::Filter("tokenTo", "2026-01-01".into()));
+    s.dispatch(Action::ApplyTokenPeriod);
+    assert!(s.dispatch(s.retry_action(Slot::TokenPeriod)).is_empty());
+    assert_eq!(s.error(Slot::TokenPeriod), "invalid_token_period");
+    assert_eq!(s.dispatch(Action::Navigate(Page::Quotas)).len(), 1);
+    assert!(s.data(Slot::TokenPeriod).is_null());
+    assert!(matches!(
+        s.retry_action(Slot::Health),
+        Action::Load(Slot::Health, false)
+    ));
+}
+
+#[test]
+fn invalid_submitted_activity_cannot_reload_old_scope_on_refresh_or_source_switch() {
+    let mut s = loaded();
+    s.page = Page::Activity;
+    s.dispatch(Action::ApplyFilters);
+    s.dispatch(Action::Filter("from", "2026-10-03".into()));
+    s.dispatch(Action::Filter("to", "2026-10-01".into()));
+    s.dispatch(Action::ApplyFilters);
+    assert!(s.dispatch(Action::Load(Slot::Activity, false)).is_empty());
+    let refresh = s.dispatch(Action::Refresh).remove(0);
+    let jobs = s.complete(&refresh, Ok(fixture("status")));
+    assert!(jobs.iter().all(|r| r.slot != Slot::Activity));
+    assert_eq!(s.error(Slot::Activity), "invalid_date_range");
+    let switch = s.dispatch(Action::Source("other".into())).remove(0);
+    let jobs = s.complete(&switch, Ok(fixture("status")));
+    assert!(jobs.iter().all(|r| r.slot != Slot::Activity));
+    assert!(s.data(Slot::Activity).is_null());
+}
+
+#[test]
+fn activity_date_validation_requires_canonical_paired_dates_and_api_bound() {
+    for (from, to, valid) in [
+        ("", "", true),
+        ("2026-10-01", "", false),
+        ("", "2026-10-01", false),
+        ("2026-02-30", "2026-03-01", false),
+        ("2026-1-01", "2026-10-01", false),
+        ("2000-01-01", "2026-10-01", false),
+        ("2026-10-01", "2026-10-01", true),
+    ] {
+        let f = Filters {
+            from: from.into(),
+            to: to.into(),
+            ..Filters::default()
+        };
+        assert_eq!(f.valid(), valid, "{from} {to}");
+    }
+}
