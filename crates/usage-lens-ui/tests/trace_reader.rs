@@ -792,6 +792,12 @@ fn exact_filter_controls_submitted_scopes_and_navigation_render_safely_in_both_l
         ] {
             assert!(html.contains(text), "missing {text}");
         }
+        let status_label = format!(
+            "<span id=\"trace-status-label\">{}</span>",
+            l.text("Trace status", "追踪状态")
+        );
+        assert!(html.contains(&status_label));
+        assert!(html.contains("aria-labelledby=\"trace-status-label\" name=\"traceStatus\""));
         assert!(html.contains("maxlength=\"160\""));
         assert_eq!(html.matches("maxlength=\"128\"").count(), 3);
         assert_eq!(html.matches("class=\"trace-exact-scope\"").count(), 2);

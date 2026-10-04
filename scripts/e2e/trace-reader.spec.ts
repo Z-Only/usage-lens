@@ -341,6 +341,7 @@ for (const locale of ["en", "zh"] as const) {
     const apply = page.getByRole("button", { name: text("Apply trace filters", "应用追踪筛选"), exact: true });
     const clear = page.getByRole("button", { name: text("Clear all trace filters", "清除全部追踪筛选"), exact: true });
     const submitted = { fromDate: "2026-10-01", toDate: "2026-10-07", threadId: "Thread/A+B:@_.1", status: "completed", requestedModel: " Requested 模型 + ", requestedReasoningEffort: "high", requestedServiceTier: "priority" };
+    await expect(status).toHaveAccessibleName(text("Trace status", "追踪状态"));
     await from.fill(submitted.fromDate); await to.fill(submitted.toDate);
     await thread.fill(submitted.threadId); await status.selectOption(submitted.status);
     await model.fill(submitted.requestedModel); await effort.fill(submitted.requestedReasoningEffort); await tier.fill(submitted.requestedServiceTier);

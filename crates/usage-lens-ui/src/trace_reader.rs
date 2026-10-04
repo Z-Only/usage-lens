@@ -62,7 +62,7 @@ pub fn trace_page(s: &State, ui: Ui) -> AnyView {
                 <label>{l.text("Trace from (UTC)", "追踪开始日期（UTC）")}<input type="date" name="traceFrom" prop:value=s.trace_filters.from.clone() on:input=event_bridge::value(ui, InputAction::Filter("traceFrom")) /></label>
                 <label>{l.text("Trace to (UTC)", "追踪结束日期（UTC）")}<input type="date" name="traceTo" prop:value=s.trace_filters.to.clone() on:input=event_bridge::value(ui, InputAction::Filter("traceTo")) /></label>
                 <label>{l.text("Thread ID (exact)", "会话 ID（精确匹配）")}<input type="text" name="traceThread" maxlength="160" autocomplete="off" spellcheck="false" prop:value=s.trace_filters.thread_id.clone() on:input=event_bridge::value(ui, InputAction::Filter("traceThread")) /></label>
-                <label>{l.text("Trace status", "追踪状态")}<select name="traceStatus" prop:value=s.trace_filters.status.clone() on:change=event_bridge::value(ui, InputAction::Filter("traceStatus"))>
+                <label><span id="trace-status-label">{l.text("Trace status", "追踪状态")}</span><select aria-labelledby="trace-status-label" name="traceStatus" prop:value=s.trace_filters.status.clone() on:change=event_bridge::value(ui, InputAction::Filter("traceStatus"))>
                     <option value="" selected=s.trace_filters.status.is_empty()>{l.text("All statuses", "全部状态")}</option>
                     {TRACE_STATUSES.into_iter().map(|status| view! { <option value=status selected=s.trace_filters.status == status>{trace_state(&Value::String(status.into()), l)}</option> }).collect_view()}
                 </select></label>
