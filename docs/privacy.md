@@ -78,6 +78,14 @@ content. Retention, content-only deletion and explicit all-data deletion preserv
 trace import/replay protection. All-data deletion removes retained trace evidence
 but reimport cannot resurrect it; a new source is a separate explicit namespace.
 
+`import-trace-bundle --dry-run` reads the same explicitly selected bounded bundle
+and existing database with the same confinement and validation, without writing,
+migrating, retaining content or making a backup. Its safe counts and predictions
+exclude raw content, IDs and paths; later input/store/setting changes can invalidate
+it. Exact local thread/status/requested-model/effort/tier filters do not widen
+content sharing. `doctor` compatibility/backup guidance reads no extra files or
+processes and never claims a verified backup or live desktop compatibility.
+
 Local `trace-attempts`, `trace-detail` and `trace-summary` are outside the Skill
 and MCP's unchanged eight aggregate commands/tools. Request settings and response
 completion evidence remain distinct. A prepared request is not transmission,
@@ -85,7 +93,7 @@ delivery or billing proof; raw diagnostic files do not establish complete histor
 
 **Back up the closed store before its first successful explicit trace import.**
 It upgrades schema 2/3 to schema 4 atomically. v0.5.0 and older cannot read schema 4;
-read-only queries in v0.6.0 also support schema 2/3 without automatic migration.
+read-only queries in v0.7.0 also support schema 2/3 without automatic migration.
 Latest Mac app/Local mode does not establish runtime or environment compatibility;
 live desktop capture validation remains pending separate user authorization.
 

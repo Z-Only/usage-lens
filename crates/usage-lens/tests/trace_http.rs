@@ -103,7 +103,6 @@ async fn local_trace_routes_keep_projection_content_in_detail_and_summary_aggreg
         "SENTINEL",
         "sourceId",
         "attemptId",
-        "threadId",
         "turnId",
         "responseId",
         "trace-thread",
@@ -112,6 +111,7 @@ async fn local_trace_routes_keep_projection_content_in_detail_and_summary_aggreg
     ] {
         assert!(!summary.to_string().contains(hidden), "leaked {hidden}");
     }
+    assert!(summary["threadId"].is_null());
     let (status, detail, _) = get(
         app.clone(),
         "/api/traces/detail?sourceId=synthetic&attemptId=one",
@@ -191,4 +191,203 @@ async fn trace_routes_enforce_loopback_scope_query_shapes_and_old_schema_read_on
     let (status, value, _) = get(app, "/api/status", &[]).await;
     assert_eq!(status, 200);
     assert_eq!(value["schemaVersion"], 2);
+}
+
+#[tokio::test]
+async fn trace_http_filters_echo_exact_scope_and_bind_cursor_across_routes() {
+    let app = http::router(store(true), 4319);
+    let scope = "sourceId=synthetic&threadId=trace-thread&status=completed&requestedModel=requested-model&requestedReasoningEffort=high&requestedServiceTier=priority&fromDate=2026-10-03&toDate=2026-10-03";
+    let (status, list, _) = get(app.clone(), &format!("/api/traces?{scope}&limit=1"), &[]).await;
+    assert_eq!(status, 200);
+    assert_eq!(list["attempts"][0]["attemptId"], "two");
+    let (status, summary, _) = get(app.clone(), &format!("/api/traces/summary?{scope}"), &[]).await;
+    assert_eq!(status, 200);
+    assert_eq!(summary["attemptCount"], "2");
+    for (key, value) in [
+        ("threadId", "trace-thread"),
+        ("status", "completed"),
+        ("requestedModel", "requested-model"),
+        ("requestedReasoningEffort", "high"),
+        ("requestedServiceTier", "priority"),
+    ] {
+        assert_eq!(list[key], value);
+        assert_eq!(summary[key], value);
+    }
+    assert!(!summary.to_string().contains("attemptId"));
+    assert!(!summary.to_string().contains("SENTINEL"));
+    let cursor = list["nextCursor"].as_str().unwrap();
+    let (status, next, _) = get(
+        app.clone(),
+        &format!("/api/traces?{scope}&limit=1&cursor={cursor}"),
+        &[],
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(next["attempts"][0]["attemptId"], "one");
+    assert!(next["nextCursor"].is_null());
+    let (status, error, _) = get(
+        app.clone(),
+        &format!(
+            "/api/traces?{}&cursor={cursor}",
+            scope.replace(
+                "requestedServiceTier=priority",
+                "requestedServiceTier=default"
+            )
+        ),
+        &[],
+    )
+    .await;
+    assert_eq!(status, 400);
+    assert_eq!(error["error"]["code"], "invalid_input");
+    for route in ["traces", "traces/summary"] {
+        for filters in [
+            "threadId=trace-Thread",
+            "status=failed",
+            "requestedModel=observed-model",
+            "requestedReasoningEffort=HIGH",
+            "requestedServiceTier=default",
+            "requestedModel=requested-model%20",
+            "requestedModel=x%27%20OR%201%3D1%20--",
+        ] {
+            let (status, value, _) = get(
+                app.clone(),
+                &format!("/api/{route}?sourceId=synthetic&{filters}"),
+                &[],
+            )
+            .await;
+            assert_eq!(status, 200, "{route} {filters}");
+            if route == "traces" {
+                assert_eq!(value["attempts"], json!([]));
+            } else {
+                assert_eq!(value["attemptCount"], "0");
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn trace_http_rejects_duplicate_invalid_and_non_trace_filter_parameters() {
+    let app = http::router(store(false), 4319);
+    for route in ["traces", "traces/summary"] {
+        for filters in [
+            "threadId=one&threadId=two",
+            "status=completed&status=failed",
+            "requestedModel=a&requestedModel=b",
+            "requestedReasoningEffort=high&requestedReasoningEffort=low",
+            "requestedServiceTier=priority&requestedServiceTier=default",
+            "status=unknown",
+            "status=COMPLETED",
+            "threadId=",
+            "threadId=bad%20id",
+            "requestedModel=",
+            "requestedModel=bad%00value",
+            "requestedReasoningEffort=bad%7Fvalue",
+            "requestedServiceTier=bad%0Avalue",
+            "requestedEffort=high",
+            "observedModel=observed-model",
+        ] {
+            let (status, _, _) = get(
+                app.clone(),
+                &format!("/api/{route}?sourceId=synthetic&{filters}"),
+                &[],
+            )
+            .await;
+            assert_eq!(status, 400, "{route} {filters}");
+        }
+        let (status,value,_) = get(app.clone(), &format!("/api/{route}?sourceId=synthetic&requestedModel=model&threadId=thread&status=incomplete&requestedReasoningEffort=high&requestedServiceTier=priority"), &[]).await;
+        assert_eq!(status, 200);
+        assert_eq!(value["coverage"]["capture"], "not_captured");
+    }
+    for path in [
+        "/api/traces/detail?sourceId=synthetic&attemptId=one&threadId=trace-thread",
+        "/api/overview?sourceId=synthetic&threadId=trace-thread",
+        "/api/skill-summary?sourceId=synthetic&requestedModel=requested-model",
+        "/api/response-tokens?sourceId=synthetic&requestedServiceTier=priority",
+    ] {
+        assert_eq!(get(app.clone(), path, &[]).await.0, 400, "{path}");
+    }
+    assert_eq!(get(app, "/api/status", &[]).await.1["schemaVersion"], 2);
+}
+
+#[tokio::test]
+async fn maximum_encoded_trace_scope_and_cursor_fit_a_trace_only_bounded_uri_budget() {
+    let store = store(false);
+    let source = format!("a{}", ":".repeat(79));
+    let thread = format!("a{}", ":".repeat(159));
+    let metadata = "模".repeat(128);
+    store.create_source(&json!({"id":source,"displayName":"Maximum synthetic filters","mode":"imported","provider":"synthetic","coverageDescription":"Synthetic only"})).unwrap();
+    let rows: Vec<Value> = ["a", "b"].into_iter().map(|id| json!({
+        "attemptId":id.repeat(160),"threadId":thread,"turnId":"turn","inferenceId":id,
+        "startedAt":"2026-10-03T00:00:00Z","completedAt":"2026-10-03T00:00:00Z","status":"completed",
+        "request":{"model":{"state":"reported","value":metadata},"reasoningEffort":{"state":"reported","value":metadata},"serviceTier":{"state":"reported","value":metadata}},
+        "observed":{"model":{"state":"not_reported","value":null},"serviceTier":{"state":"not_reported","value":null}},
+        "responseId":null,"upstreamRequestId":null,"tokens":null,"requestProjection":null,"responseProjection":null,"evidence":"prepared_request"
+    })).collect();
+    store.import_trace_bundle(&json!({"sourceId":source,"fingerprint":"f".repeat(64),"adapterVersion":TRACE_ADAPTER_VERSION,"sourceVersion":TRACE_SOURCE_VERSION,"importedAt":"2026-10-03T00:00:02Z","bundleId":"maximum-http","attempts":rows,"warningCodes":[]})).unwrap();
+    let app = http::router(store, 4319);
+    let mut params = vec![
+        ("sourceId", source.as_str()),
+        ("threadId", thread.as_str()),
+        ("status", "completed"),
+        ("requestedModel", metadata.as_str()),
+        ("requestedReasoningEffort", metadata.as_str()),
+        ("requestedServiceTier", metadata.as_str()),
+        ("fromDate", "2026-10-03"),
+        ("toDate", "2026-10-03"),
+    ];
+    let query = form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(&params)
+        .finish();
+    let summary_path = format!("/api/traces/summary?{query}");
+    assert!(summary_path.len() > 4096);
+    let (status, summary, _) = get(app.clone(), &summary_path, &[]).await;
+    assert_eq!(status, 200, "{summary}");
+    assert_eq!(summary["attemptCount"], "2");
+    let list_path = format!("/api/traces?{query}&limit=1");
+    assert!(list_path.len() > 4096);
+    let (status, first, _) = get(app.clone(), &list_path, &[]).await;
+    assert_eq!(status, 200, "{first}");
+    assert_eq!(first["attempts"][0]["attemptId"], "b".repeat(160));
+    params.extend([
+        ("limit", "1"),
+        ("cursor", first["nextCursor"].as_str().unwrap()),
+    ]);
+    // Clients may percent-encode every byte, including ASCII parameter names and
+    // the returned base64url cursor. This is still the same valid exact scope.
+    let encode = |value: &str| {
+        value
+            .bytes()
+            .map(|byte| format!("%{byte:02X}"))
+            .collect::<String>()
+    };
+    let encoded_query = params
+        .iter()
+        .map(|(key, value)| format!("{}={}", encode(key), encode(value)))
+        .collect::<Vec<_>>()
+        .join("&");
+    let page_path = format!("/api/traces?{encoded_query}");
+    assert!(page_path.len() > 4096 && page_path.len() <= 8192);
+    let (status, next, _) = get(app.clone(), &page_path, &[]).await;
+    assert_eq!(status, 200, "{next}");
+    assert_eq!(next["attempts"][0]["attemptId"], "a".repeat(160));
+    assert!(next["nextCursor"].is_null());
+    for route in ["/api/traces", "/api/traces/summary"] {
+        let oversized = format!("{route}?{}", "x".repeat(8193 - route.len() - 1));
+        assert_eq!(oversized.len(), 8193);
+        let (status, error, _) = get(app.clone(), &oversized, &[]).await;
+        assert_eq!(status, 400);
+        assert_eq!(error["error"]["code"], "invalid_path");
+    }
+    for route in [
+        "/api/status",
+        "/api/events",
+        "/api/traces/detail",
+        "/api/traces/other",
+    ] {
+        let oversized = format!("{route}?{}", "x".repeat(4097 - route.len() - 1));
+        assert_eq!(oversized.len(), 4097);
+        let (status, error, _) = get(app.clone(), &oversized, &[]).await;
+        assert_eq!(status, 400);
+        assert_eq!(error["error"]["code"], "invalid_path", "{route}");
+    }
 }

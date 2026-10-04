@@ -111,15 +111,24 @@ fn validate_request(
     if header(headers, "sec-fetch-site") == Some("cross-site") {
         return Err(HttpError::new("cross_site_request", StatusCode::FORBIDDEN));
     }
+    let path = request.uri().path();
+    // Exact trace scopes include three 128-UTF-16-unit metadata values plus
+    // identities, dates and an 800-character cursor. Fully percent-encoded valid
+    // keys/values need at most 7,042 bytes including separators and the route.
+    // Keep the existing budget for every other route.
+    let uri_limit = if matches!(path, "/api/traces" | "/api/traces/summary") {
+        8192
+    } else {
+        4096
+    };
     let raw = request.uri().to_string();
     if !raw.starts_with('/')
         || raw.starts_with("//")
-        || raw.len() > 4096
+        || raw.len() > uri_limit
         || raw.bytes().any(|b| b == b'\\' || b < 32)
     {
         return Err(bad("invalid_path"));
     }
-    let path = request.uri().path();
     let bytes = path.as_bytes();
     for (i, b) in bytes.iter().enumerate() {
         if *b == b'%'
@@ -258,13 +267,36 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
             (
                 "/api/traces",
                 (
-                    &["sourceId", "fromDate", "toDate", "cursor", "limit"][..],
+                    &[
+                        "sourceId",
+                        "fromDate",
+                        "toDate",
+                        "threadId",
+                        "status",
+                        "requestedModel",
+                        "requestedReasoningEffort",
+                        "requestedServiceTier",
+                        "cursor",
+                        "limit",
+                    ][..],
                     &["sourceId"][..],
                 ),
             ),
             (
                 "/api/traces/summary",
-                (&["sourceId", "fromDate", "toDate"][..], &["sourceId"][..]),
+                (
+                    &[
+                        "sourceId",
+                        "fromDate",
+                        "toDate",
+                        "threadId",
+                        "status",
+                        "requestedModel",
+                        "requestedReasoningEffort",
+                        "requestedServiceTier",
+                    ][..],
+                    &["sourceId"][..],
+                ),
             ),
             (
                 "/api/traces/detail",

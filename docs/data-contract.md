@@ -76,6 +76,19 @@ the selected setup checks pass. `incomplete` alone exits 0. `ready` means the lo
 setup can be queried; it does not imply recent or complete collection. A passed
 diagnostic does not prove live account or actual client compatibility.
 
+In v0.7, `compatibility` documents `readableSchemas: [2,3,4]`,
+`requiredJournalMode: "rollback"`, `traceImportTargetSchema: 4`, `selectedSchema`
+and `wouldUpgrade`. The latter two fields are null unless the selected store was
+successfully read; otherwise `wouldUpgrade` is true for schema 2/3 and false for 4,
+conditional on a successful explicit trace import. `upgradeTrigger` names that
+condition. This is schema guidance, not validation of a trace bundle. Static
+`rollbackWarning` and `backupSteps` describe stopping all writers, verifying a
+private closed-store backup and restoring a separate compatible copy without
+changing schema numbers or opening upgraded data with incompatible older binaries.
+`backupStatus` remains `not_verified`; doctor neither makes nor verifies backups.
+Safe `storage_error` / `unsupported_schema` guidance does not claim a specific
+failure cause or probe other files, client processes or configuration.
+
 ## Values and precision
 
 A metric cell has one of these states:
@@ -296,7 +309,7 @@ to compare and cannot be reconstructed; adoption never backfills their content.
 Raw-evidence conflict checks apply from the first accepted incremental digest
 onward, independent of subsequent capture settings.
 
-## Selected RolloutTrace bundles (v0.6)
+## Selected RolloutTrace bundles (v0.6–v0.7)
 
 The separate `import-trace-bundle --db ABS --source ID --directory ABS
 --source-version a956835d020762cb2b570053af06f643a11c0ecc` reads one bounded,
@@ -304,6 +317,33 @@ explicitly selected upstream `rust-v0.160.0` diagnostic bundle. The contract,
 limits, exact source links and local query workflow are in [trace import](trace-import.md).
 It does not discover directories, watch files, enable recording, install or
 configure a client, launch another process or make a model request.
+
+The v0.7 `--dry-run` variant opens the selected existing store read-only and shares
+the write's confinement, bounded parsing, projection and replay checks. Success
+returns `operation: "trace_import_preflight"`, `dryRun: true`, `status: "ready"`,
+`attemptsInBundle`, `attemptsWouldInsert`, `attemptsAlreadyPresent`,
+`contentsWouldRetain` (decimal strings), `importAlreadyPresent`,
+`contentCaptureEnabled`, safe warnings and `nextSteps`. `database` reports the
+current `schemaVersion`, `targetSchemaVersion: 4`, `wouldUpgrade` and read-only
+access. It returns no attempt identities, content or private paths. Validation,
+source, paused-capture and immutable-conflict failures use the existing safe error
+codes and nonzero exit status. Nothing is created, migrated, captured or backed up.
+Later file/store/setting changes can invalidate the preview; an approved write
+without `--dry-run` reparses and atomically rechecks conflicts.
+
+Both local trace lists and summaries accept exact `threadId`, `status`,
+`requestedModel`, `requestedReasoningEffort` and `requestedServiceTier` HTTP/core
+filters; CLI uses `--thread`, `--status`, `--requested-model`, `--requested-effort`
+and `--requested-tier`. Any subset combines with AND and optional paired UTC dates.
+Status is `completed`, `failed`, `cancelled` or `incomplete`; thread IDs use the
+existing 160-character identifier bound and requested strings are nonempty,
+control-free and at most 128 UTF-16 units. Matches are case-sensitive with no
+trimming, aliases or default inference. Requested filters match reported request
+values only. Null/omitted/invalid states and response-side observations do not
+match requested strings. List/summary filter echoes use null for absent fields.
+Cursors bind source and all submitted filters, so changed scope or pre-v0.7
+cursors require a fresh first page. Summary groups and totals share that scope;
+source-wide import warnings remain independent of all attempt filters.
 
 Attempt records are prepared-request evidence; upstream records them before
 transmission, and WebSocket warmup can record logical full input rather than exact
@@ -353,7 +393,7 @@ bundle are conflicts, not incremental updates. Select a closed stable bundle.
 
 Only a successful explicit trace import upgrades schema 2/3 to schema 4. **Make a
 verified closed-store backup first. v0.5.0 and older cannot read schema 4.**
-v0.6.0 read-only queries support rollback-journal schemas 2/3/4 without migration;
+v0.7.0 read-only queries support rollback-journal schemas 2/3/4 without migration;
 normal opens do not automatically enable trace storage. Exact local synthetic
 checks do not establish desktop runtime compatibility or environment inheritance.
 Live desktop validation remains pending separate user authorization.

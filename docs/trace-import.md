@@ -1,6 +1,6 @@
 # Explicit local RolloutTrace bundle import
 
-Usage Lens v0.6.0 reads one deliberately selected, bounded local RolloutTrace
+Usage Lens v0.7.0 reads one deliberately selected, bounded local RolloutTrace
 bundle. It does not enable recording, discover trace directories, watch files,
 change client configuration, install anything, launch another process or make a
 model request. The import is a separate local write, outside the conversational
@@ -56,16 +56,19 @@ and replay metadata. v0.5.0 and older cannot read schema 4. Failed parsing or
 validation does not migrate. Ordinary startup and read-only queries never perform
 this upgrade. See [backup and rollback](AI_INSTALL.md#upgrade-rollback-and-uninstall).
 
-After creating a source explicitly, import one chosen bundle:
+After creating a source explicitly, preview one chosen bundle against the existing
+store. Every path, source, ID, date and filter in these commands is a placeholder;
+replace it with the reviewed value. A preview is still a local file read requiring
+authorized access to the chosen bundle and database.
 
 ```sh
-usage-lens source --db '/absolute/private/usage.sqlite' \
-  --source local-traces --mode imported --name 'Selected local traces'
+'/ABSOLUTE/usage-lens' source --db '/ABSOLUTE/private/usage.sqlite' \
+  --source 'SOURCE' --mode imported --name 'DISPLAY_NAME'
 
-usage-lens import-trace-bundle \
-  --db '/absolute/private/usage.sqlite' \
-  --source local-traces \
-  --directory '/absolute/private/selected-trace-bundle' \
+'/ABSOLUTE/usage-lens' import-trace-bundle --dry-run \
+  --db '/ABSOLUTE/private/usage.sqlite' \
+  --source 'SOURCE' \
+  --directory '/ABSOLUTE/private/selected-trace-bundle' \
   --source-version a956835d020762cb2b570053af06f643a11c0ecc
 ```
 
@@ -73,7 +76,7 @@ For Windows PowerShell, use absolute Windows paths and the call operator for a
 quoted executable:
 
 ```powershell
-& 'C:\ABSOLUTE\usage-lens.exe' import-trace-bundle --db 'C:\PRIVATE\usage.sqlite' --source local-traces --directory 'C:\PRIVATE\selected-trace-bundle' --source-version a956835d020762cb2b570053af06f643a11c0ecc
+& 'C:\ABSOLUTE\usage-lens.exe' import-trace-bundle --dry-run --db 'C:\PRIVATE\usage.sqlite' --source 'SOURCE' --directory 'C:\PRIVATE\selected-trace-bundle' --source-version a956835d020762cb2b570053af06f643a11c0ecc
 ```
 
 The installed native executable needs no Node.js, Bun or Rust. Supply directory,
@@ -82,17 +85,57 @@ No embedded command is executed. Only validated payload references inside that
 chosen bundle may be read, never arbitrary paths found in prompt or tool text.
 Review the import's warnings even when the command succeeds.
 
+### Read-only preflight, then an explicit write
+
+`--dry-run` opens only the selected **existing** database read-only. It uses the
+same bounded, confined file reader, parser, projection normalizer and immutable
+replay checks as the write. It never creates a missing database, migrates a schema,
+records an import/checkpoint, retains content or creates a backup. The selected
+raw bundle remains untouched. Content-capture settings do not bypass projection
+validation or its limits.
+
+A successful preview is JSON with `operation: "trace_import_preflight"`,
+`dryRun: true` and `status: "ready"`. Decimal-string counts are `attemptsInBundle`,
+`attemptsWouldInsert`, `attemptsAlreadyPresent` and `contentsWouldRetain`.
+`attemptsAlreadyPresent` counts accepted/replay-suppressed input attempts; it does
+not mean their rows or content still exist after deletion. `contentsWouldRetain`
+counts newly accepted attempts with an eligible visible-text projection under the
+current capture setting, not messages, characters or a complete transcript.
+`importAlreadyPresent` distinguishes a fully accepted bundle replay. The
+`database` object reports `accessMode: "read_only"`, the current `schemaVersion`,
+`targetSchemaVersion: 4` and `wouldUpgrade`. `contentCaptureEnabled` reflects the
+current local setting, not permission to enable it. Review `warningCodes`,
+`warnings` and `nextSteps`. No attempt IDs, content or private paths are echoed.
+
+Malformed, unsafe, oversized, incompatible, paused, wrong-source or conflicting
+inputs fail with the existing safe error codes and exit 1; they do not return a
+successful preview. An immutable conflict is `trace_identity_conflict`, not an
+invitation to rewrite accepted files. Missing/unreadable/unsupported-journal
+stores can report `storage_error`; unsupported database schemas report
+`unsupported_schema`. Correct the reviewed input or use a documented compatible
+backup; do not probe arbitrary stores or change schema numbers.
+
+**A preview is a point-in-time prediction, not a reservation or backup.** Later
+changes to the source bundle, selected database, capture settings or competing
+writes can invalidate it. After reviewing it, stop writers and verify a private
+closed-store backup. Only with approval for the write, rerun the same explicit
+command **without `--dry-run`**. The write reparses the bundle and rechecks replay
+conflicts atomically; a successful preview does not guarantee later success.
+Identical replays and already accepted attempts do not backfill content.
+
 ### Local queries
 
 These commands read an existing database and remain outside the eight-command
 conversational Skill and eight-tool MCP boundary:
 
 ```sh
-usage-lens trace-attempts --db '/absolute/private/usage.sqlite' --source local-traces
-usage-lens trace-detail --db '/absolute/private/usage.sqlite' --source local-traces \
+'/ABSOLUTE/usage-lens' trace-attempts --db '/ABSOLUTE/private/usage.sqlite' --source 'SOURCE'
+'/ABSOLUTE/usage-lens' trace-detail --db '/ABSOLUTE/private/usage.sqlite' --source 'SOURCE' \
   --attempt 'ATTEMPT_ID_FROM_TRACE_ATTEMPTS'
-usage-lens trace-summary --db '/absolute/private/usage.sqlite' --source local-traces \
-  --from 2026-09-27 --to 2026-10-03
+'/ABSOLUTE/usage-lens' trace-summary --db '/ABSOLUTE/private/usage.sqlite' --source 'SOURCE' \
+  --from 'FROM_YYYY-MM-DD' --to 'TO_YYYY-MM-DD' \
+  --thread 'THREAD_ID' --status 'STATUS' --requested-model 'EXACT_REQUESTED_MODEL' \
+  --requested-effort 'EXACT_REQUESTED_EFFORT' --requested-tier 'EXACT_REQUESTED_TIER'
 ```
 
 `trace-attempts` accepts `--limit` from 1 through 500 (default 50), `--cursor`
@@ -105,14 +148,41 @@ same source rather than inventing an ID or joining by similar text. Individual
 attempt identities and optional visible content are local inspection data, not
 new conversational tools.
 
+Both `trace-attempts` and `trace-summary` additionally accept exact `--thread`,
+`--status`, `--requested-model`, `--requested-effort` and `--requested-tier`
+filters. Any subset may be used, with or without paired dates; all supplied
+filters combine with AND. Status is exactly `completed`, `failed`, `cancelled` or
+`incomplete`. Thread IDs follow the existing identifier contract (1–160 ASCII
+characters, starting alphanumeric; remaining characters may also be `. _ : @ / + -`).
+Requested values are nonempty, control-free strings of at most 128 UTF-16 units.
+Matching is case-sensitive without trimming or alias/default inference.
+Request metadata filters match only the `reported` state and its exact value;
+explicit null, omitted and invalid states do not match a requested string.
+They never filter observed response values or map Fast/Standard labels.
+
+List rows, summary totals, token missingness and metadata groups use the same
+submitted scope. Result fields `fromDate`, `toDate`, `threadId`, `status`,
+`requestedModel`, `requestedReasoningEffort` and `requestedServiceTier` echo that
+scope, using null for absent filters. Cursors are bound to the source and every
+submitted filter, including dates. Changing or removing a filter requires a new
+first-page query; reusing a mismatched cursor fails. Pre-v0.7 trace cursors must
+also be restarted. Page size may change without changing the filter scope.
+
 ### Local dashboard and query scopes
 
 The bilingual **Traces / 追踪** dashboard uses local `GET /api/traces`,
-`GET /api/traces/detail` and `GET /api/traces/summary`. Its submitted date filters
-share the CLI's attempt-start UTC basis. The **This UTC week** preset selects the
-current Monday–Sunday UTC calendar week; it does not identify a provider quota
+`GET /api/traces/detail` and `GET /api/traces/summary`. List and summary HTTP
+filters are `threadId`, `status`, `requestedModel`, `requestedReasoningEffort` and
+`requestedServiceTier`, plus paired `fromDate` / `toDate`. Its submitted filters
+share the CLI's exact-match rules and attempt-start UTC date basis. The **This UTC
+week** preset selects the current Monday–Sunday UTC calendar week; it does not identify a provider quota
 cycle. Pagination applies to the submitted filters, not unsubmitted input edits.
-The detail reader shows optional supported visible text and safe metadata only.
+Submitting filters resets pagination and closes the selected detail. Loading
+and error states do not show a previous filter scope's rows or summary as current;
+late responses from an older submission are ignored. The detail reader shows
+optional supported visible text and safe metadata only. **View thread** applies
+the displayed exact thread ID alongside the submitted filters and starts a new
+first-page query; it does not infer relationships from similar text.
 
 Summary groups distinguish `byRequestedModel`, `byRequestedReasoningEffort`,
 `byRequestedServiceTier`, `byObservedModel` and `byObservedServiceTier`. Each
@@ -197,7 +267,7 @@ in Usage Lens remains off by default. To retain the supported visible-text
 projection, opt in before accepting new records:
 
 ```sh
-usage-lens settings --db '/absolute/private/usage.sqlite' --content true
+'/ABSOLUTE/usage-lens' settings --db '/ABSOLUTE/private/usage.sqlite' --content true
 ```
 
 The optional projection retains only supported visible user/assistant text.
@@ -230,7 +300,7 @@ a newly created source is a separate namespace with potentially overlapping
 counts, not recovery of the deleted source. These protections cannot reconstruct
 previously deleted pre-upgrade history or prove that named sources do not overlap.
 
-v0.6.0 read-only queries support schema 2, 3 and 4 rollback-journal stores without
+v0.7.0 read-only queries support schema 2, 3 and 4 rollback-journal stores without
 migration. Keep a compatible pre-upgrade backup for binary rollback. Do not try to
 open schema 4 with an older binary or modify schema numbers to bypass that check.
 

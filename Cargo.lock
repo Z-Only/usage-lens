@@ -2354,7 +2354,7 @@ dependencies = [
 
 [[package]]
 name = "usage-lens"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -2381,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "usage-lens-ui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "chrono",
  "gloo-net 0.7.0",

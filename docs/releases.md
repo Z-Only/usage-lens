@@ -13,6 +13,42 @@ Usage Lens follows [Semantic Versioning](https://semver.org/). The initial publi
 
 The publishing pipeline currently accepts stable `vMAJOR.MINOR.PATCH` tags only, with no leading zeros. Prerelease/build-metadata tags require a reviewed workflow change first. All source, workflow, version, and changelog changes go through a PR and the required tests.
 
+## v0.7.0 trace workflow compatibility
+
+This batch adds a read-only trace import preflight, exact trace list/summary
+filters and actionable doctor backup/schema guidance. It introduces no new schema
+and does not alter the eight-command Skill or optional eight-tool MCP allowlists.
+The [trace guide](trace-import.md) ships in the existing release file allowlist;
+its instructions describe both preview and separately authorized write workflows.
+
+`import-trace-bundle --dry-run` requires an existing selected database and the
+same explicit directory/source/version as import. It shares confined bounded
+parsing, normalized content validation and immutable replay checks, without
+creating, migrating or retaining anything. A successful preview is only a
+point-in-time prediction; source/store/capture-setting changes can invalidate it.
+Actual import reparses and atomically rechecks conflicts. Doctor's compatibility
+object is schema guidance, not a backup check or live desktop validation.
+
+**Stop all writers and verify a private closed-store backup before a write.**
+A successful trace import still upgrades schema 2/3 to 4. v0.5.0 and older cannot
+read schema 4; v0.3.0 and older cannot read schema 3. Never edit schema numbers or
+open upgraded data with an incompatible older binary. For rollback, preserve the
+current store and use a separate compatible copy of the pre-upgrade backup.
+Read-only v0.7.0 queries/doctor/preflight support rollback-journal schemas 2/3/4.
+
+Exact trace filters combine with paired dates and apply consistently to rows,
+summary totals and metadata groups. Request filters do not infer response values
+or default settings. Cursors bind source and all submitted filters; old v0.6
+trace cursors or cursors from another scope require a fresh first-page query.
+Source-wide import warnings retain their independent scope. Raw content remains
+local; no ordinary conversational query can read it.
+
+Before publication, run the exact-commit production gate, browser and native
+cross-platform CI, and extracted-artifact smoke. The smoke must verify preflight
+no-write invariants, replay/conflicts, schema guidance, filtered lists/summaries,
+cursor scope and the unchanged MCP discovery boundary with synthetic data. A
+working-tree test result is not proof that a tagged artifact or real desktop works.
+
 ## v0.6.0 selected trace-bundle compatibility
 
 This minor release adds a bounded explicit `import-trace-bundle` write for one

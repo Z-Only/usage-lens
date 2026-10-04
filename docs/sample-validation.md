@@ -37,7 +37,7 @@ If the installed producer differs from the pinned baseline, state its version if
 
 ## Source to field matrix
 
-The following is the supported projection, not a promise that every saved rollout contains these records. Exact constraints and warning behavior are in [record import](record-import.md) and the native [parser](../crates/usage-lens/src/adapters/rollout.rs).
+The following is the supported projection, not a promise that every saved rollout contains these records. Exact constraints and warning behavior are in [record import](record-import.md) and the native parser (`crates/usage-lens/src/adapters/rollout.rs` in the source checkout; source code is not bundled with the installed executable).
 
 | Input evidence | Fields required for this projection | Usage Lens result and limits |
 | --- | --- | --- |

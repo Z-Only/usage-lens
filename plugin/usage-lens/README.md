@@ -47,7 +47,10 @@ It checks the running binary and embedded dashboard; an optional explicit `--db`
 and `--source` check the existing store read-only. `--max-age-ms` requires a source.
 It returns JSON and exits 1 when a check fails. It does not scan configuration,
 launch subprocesses, contact services, install clients, read credentials, or repair
-the store. `doctor` is outside the conversational Skill.
+the store. Its `compatibility` object describes readable schemas 2/3/4, the
+schema-4 trace target, conditional `wouldUpgrade` and backup/rollback steps.
+Unknown selected schemas remain null, and `backupStatus` is `not_verified`;
+it never makes or verifies a backup. `doctor` is outside the conversational Skill.
 
 Example POSIX query after replacing the reviewed placeholders:
 
@@ -70,7 +73,7 @@ paths and values for the actual host shell. Installing the instruction-only Skil
 does not grant local execution permissions. The local database must already have
 been created and populated through separately authorized workflows. The dashboard,
 hooks, imports, and collectors remain independent of conversational setup.
-Persisted queries in v0.6.0 accept schema-2, schema-3 and schema-4 rollback-journal stores,
+Persisted queries in v0.7.0 accept schema-2, schema-3 and schema-4 rollback-journal stores,
 including normal older schema-2 stores, without migration. They fail rather than
 create or migrate a database. The separate `import-rollout-incremental` write is
 outside the Skill and MCP allowlists. Its first successful import upgrades to
@@ -84,7 +87,12 @@ A successful separate `import-trace-bundle` write upgrades schema 2/3 to schema 
 v0.5.0 and older cannot read schema 4. Back up the closed store first. That importer
 and local `trace-attempts`, `trace-detail`, and `trace-summary` queries remain outside
 the unchanged eight-command/tool allowlists. No trace capture or desktop setup is
-enabled by installing this package. See [trace import](../../docs/trace-import.md).
+enabled by installing this package. The optional `--dry-run` preview uses the
+same validations against the selected existing store read-only, reports predicted
+counts/replay/schema/content consequences, and makes no backup or persistent
+change. Future changes can invalidate it. Exact thread/status/requested metadata
+filters on trace lists/summaries remain local-only too. None is a ninth Skill
+command or MCP tool. See [trace import](../../docs/trace-import.md).
 
 CLI queries share their returned aggregates with the assistant provider, just as
 MCP queries do. The skill must not send retained content or the database. Its

@@ -160,6 +160,10 @@ fn normalize_attempt(input: &Value) -> CoreResult<Value> {
         "tokens":tokens,"requestProjection":projection(&input["requestProjection"])? ,"responseProjection":projection(&input["responseProjection"])? ,"evidence":"prepared_request"
     }))
 }
+#[path = "trace_filters.rs"]
+mod trace_filters;
+use trace_filters::{FILTER_KEYS, FILTER_SQL, TraceFilters};
+
 fn optional_range(input: &Value) -> CoreResult<(Option<String>, Option<String>)> {
     match (input.get("fromDate"), input.get("toDate")) {
         (None, None) => Ok((None, None)),
@@ -214,6 +218,85 @@ impl Totals {
             coverage.insert((*key).into(), json!({"reportedCount":counts[0].to_string(),"omittedCount":counts[1].to_string(),"notReportedCount":counts[2].to_string(),"invalidCount":counts[3].to_string()}));
         }
         json!({"count":self.count.to_string(),"tokenAttemptCount":self.token_count.to_string(),"totals":totals,"tokenCoverage":coverage})
+    }
+}
+struct TraceBundle {
+    source: String,
+    bundle: String,
+    fingerprint: String,
+    imported_at: String,
+    warnings: Vec<Value>,
+    attempts: Vec<Value>,
+    bundle_digest: String,
+}
+impl TraceBundle {
+    fn parse(input: &Value) -> CoreResult<Self> {
+        exact_keys(
+            input,
+            &[
+                "sourceId",
+                "fingerprint",
+                "adapterVersion",
+                "sourceVersion",
+                "importedAt",
+                "bundleId",
+                "attempts",
+                "warningCodes",
+            ],
+        )?;
+        check_size(input, RAW_BYTES)?;
+        let source = source_id(&input["sourceId"])?;
+        let bundle = identifier(&input["bundleId"])?;
+        let fingerprint = fingerprint(&input["fingerprint"])?;
+        let imported_at = timestamp(&input["importedAt"])?;
+        require(
+            input["adapterVersion"] == TRACE_ADAPTER_VERSION
+                && input["sourceVersion"] == TRACE_SOURCE_VERSION,
+        )?;
+        let warnings = input["warningCodes"]
+            .as_array()
+            .ok_or_else(|| error("invalid_input"))?;
+        require(warnings.len() <= 100)?;
+        for warning in warnings {
+            warning_code(warning)?;
+        }
+        let rows = input["attempts"]
+            .as_array()
+            .ok_or_else(|| error("invalid_input"))?;
+        require(rows.len() <= BATCH_EVENTS)?;
+        let attempts: Vec<Value> = rows
+            .iter()
+            .map(normalize_attempt)
+            .collect::<CoreResult<_>>()?;
+        let bundle_digest = digest(&json!({"bundleId":bundle,"attempts":attempts}));
+        Ok(Self {
+            source,
+            bundle,
+            fingerprint,
+            imported_at,
+            warnings: warnings.clone(),
+            attempts,
+            bundle_digest,
+        })
+    }
+}
+struct TracePlan {
+    indexes: Vec<usize>,
+    already_present: bool,
+    capture: bool,
+    schema: i64,
+}
+impl TracePlan {
+    fn retained(&self, bundle: &TraceBundle) -> usize {
+        self.indexes
+            .iter()
+            .filter(|index| {
+                let attempt = &bundle.attempts[**index];
+                self.capture
+                    && (!attempt["requestProjection"].is_null()
+                        || !attempt["responseProjection"].is_null())
+            })
+            .count()
     }
 }
 impl UsageStore {
@@ -302,115 +385,169 @@ impl UsageStore {
         result["importWarnings"] = import_warnings;
         Ok(result)
     }
+    /// Shared immutable-replay planner. It never migrates or writes. The writer
+    /// calls it again inside its own transaction; a preview is not a reservation.
+    fn plan_trace_import(&self, bundle: &TraceBundle) -> CoreResult<TracePlan> {
+        self.capture_allowed()?;
+        if self.source(&json!(bundle.source))?["mode"] != "imported" {
+            return Err(error("imported_source_required"));
+        }
+        let schema = safe(
+            self.db()?
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0)),
+        )?;
+        let mut plan = TracePlan {
+            indexes: Vec::new(),
+            already_present: false,
+            capture: self.get_settings()?["contentCaptureEnabled"] == true,
+            schema,
+        };
+        if schema >= 4 {
+            let prior: Option<(String,String,String)> = safe(self.db()?.query_row("SELECT bundle_id,fingerprint,digest FROM trace_imports WHERE source_id=? AND (bundle_id=? OR fingerprint=?)", params![bundle.source,bundle.bundle,bundle.fingerprint], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional())?;
+            if let Some((old_bundle, old_fingerprint, old_digest)) = prior {
+                if old_bundle != bundle.bundle
+                    || old_fingerprint != bundle.fingerprint
+                    || old_digest != bundle.bundle_digest
+                {
+                    return Err(error("trace_identity_conflict"));
+                }
+                plan.already_present = true;
+                return Ok(plan);
+            }
+        }
+        let mut ids: BTreeMap<String, (String, String)> = BTreeMap::new();
+        let mut identities = BTreeMap::new();
+        let mut responses = BTreeMap::new();
+        for (index, attempt) in bundle.attempts.iter().enumerate() {
+            let id = s(&attempt["attemptId"]);
+            let identity = digest(&json!([
+                attempt["threadId"],
+                attempt["turnId"],
+                attempt["inferenceId"]
+            ]));
+            let hash = digest(attempt);
+            if let Some((old_identity, old_digest)) = ids.get(id) {
+                if old_identity != &identity || old_digest != &hash {
+                    return Err(error("trace_identity_conflict"));
+                }
+                continue;
+            }
+            if identities.get(&identity).is_some_and(|owner| owner != id) {
+                return Err(error("trace_identity_conflict"));
+            }
+            ids.insert(id.to_owned(), (identity.clone(), hash.clone()));
+            identities.insert(identity.clone(), id.to_owned());
+            if schema >= 4 {
+                let old: Option<(String,String,String)> = safe(self.db()?.query_row("SELECT attempt_id,identity,digest FROM trace_tombstones WHERE source_id=? AND (attempt_id=? OR identity=?)", params![bundle.source,id,identity], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional())?;
+                if let Some((old_id, old_identity, old_digest)) = old {
+                    if old_id != id || old_identity != identity || old_digest != hash {
+                        return Err(error("trace_identity_conflict"));
+                    }
+                    continue;
+                }
+            }
+            if let Some(response) = attempt["responseId"].as_str() {
+                if responses.get(response).is_some_and(|owner| owner != id) {
+                    return Err(error("trace_identity_conflict"));
+                }
+                if schema >= 4 {
+                    let owner: Option<String> = safe(self.db()?.query_row("SELECT attempt_id FROM trace_response_tombstones WHERE source_id=? AND response_id=?", params![bundle.source,response], |row| row.get(0)).optional())?;
+                    if owner.as_deref().is_some_and(|owner| owner != id) {
+                        return Err(error("trace_identity_conflict"));
+                    }
+                }
+                responses.insert(response.to_owned(), id.to_owned());
+            }
+            plan.indexes.push(index);
+        }
+        Ok(plan)
+    }
+    /// Read-only preview against the current store snapshot. No content or record
+    /// identifiers are returned; the exact same validation and replay plan runs on import.
+    pub fn preflight_trace_bundle(&self, input: &Value) -> CoreResult<Value> {
+        let bundle = TraceBundle::parse(input)?;
+        self.read(|| {
+            let plan = self.plan_trace_import(&bundle)?;
+            Ok(json!({
+                "schemaVersion":1,"operation":"trace_import_preflight","dryRun":true,
+                "status":"ready","attemptsInBundle":bundle.attempts.len().to_string(),
+                "attemptsWouldInsert":plan.indexes.len().to_string(),
+                "attemptsAlreadyPresent":(bundle.attempts.len()-plan.indexes.len()).to_string(),
+                "contentsWouldRetain":plan.retained(&bundle).to_string(),
+                "importAlreadyPresent":plan.already_present,
+                "database":{"accessMode":"read_only","schemaVersion":plan.schema,"targetSchemaVersion":4,"wouldUpgrade":plan.schema<4},
+                "contentCaptureEnabled":plan.capture,"warningCodes":bundle.warnings,
+                "warnings":TRACE_WARNINGS,
+                "nextSteps":[
+                    if plan.schema<4 {"Stop every writer and make a verified private backup before importing; success upgrades to schema 4, unreadable by v0.5.0 and older."} else {"Keep a verified private backup before changing the store; this preview creates no backup."},
+                    if plan.capture {"Only eligible redacted visible-text projections from newly accepted attempts would be retained; redaction is best-effort."} else {"Content capture is off. An import would retain metadata only; enabling capture later cannot backfill these attempts."},
+                    "This preview describes one read-only snapshot, not a reservation. Files, settings or records may change before the explicit import, which validates again atomically.",
+                    "Run the same explicit import without --dry-run only after reviewing the warnings. No recording, client setup or live compatibility was checked."
+                ]
+            }))
+        })
+    }
     /// Atomically imports one explicitly selected immutable bundle. Metadata-only imports still
     /// retain content-free identity hashes, so a later import can never backfill deleted content.
     pub fn import_trace_bundle(&self, input: &Value) -> CoreResult<Value> {
-        exact_keys(
-            input,
-            &[
-                "sourceId",
-                "fingerprint",
-                "adapterVersion",
-                "sourceVersion",
-                "importedAt",
-                "bundleId",
-                "attempts",
-                "warningCodes",
-            ],
-        )?;
-        check_size(input, RAW_BYTES)?;
-        let source = source_id(&input["sourceId"])?;
-        let bundle = identifier(&input["bundleId"])?;
-        let fingerprint = fingerprint(&input["fingerprint"])?;
-        let imported_at = timestamp(&input["importedAt"])?;
-        require(
-            input["adapterVersion"] == TRACE_ADAPTER_VERSION
-                && input["sourceVersion"] == TRACE_SOURCE_VERSION,
-        )?;
-        let warnings = input["warningCodes"]
-            .as_array()
-            .ok_or_else(|| error("invalid_input"))?;
-        require(warnings.len() <= 100)?;
-        for warning in warnings {
-            warning_code(warning)?;
-        }
-        let rows = input["attempts"]
-            .as_array()
-            .ok_or_else(|| error("invalid_input"))?;
-        require(rows.len() <= BATCH_EVENTS)?;
-        let attempts: Vec<Value> = rows
-            .iter()
-            .map(normalize_attempt)
-            .collect::<CoreResult<_>>()?;
-        let bundle_digest = digest(&json!({"bundleId":bundle,"attempts":attempts}));
+        let bundle = TraceBundle::parse(input)?;
         self.write(|| {
-            self.capture_allowed()?;
-            if self.source(&json!(source))?["mode"] != "imported" { return Err(error("imported_source_required")); }
-            self.migrate_traces()?;
-            let prior: Option<(String,String,String)> = safe(self.db()?.query_row("SELECT bundle_id,fingerprint,digest FROM trace_imports WHERE source_id=? AND (bundle_id=? OR fingerprint=?)", params![source,bundle,fingerprint], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional())?;
-            if let Some((old_bundle,old_fingerprint,old_digest)) = prior {
-                if old_bundle != bundle || old_fingerprint != fingerprint || old_digest != bundle_digest { return Err(error("trace_identity_conflict")); }
-                return Ok(json!({"attemptsInserted":"0","contentsRetained":"0","importAlreadyPresent":true,"warningCodes":warnings,"warnings":TRACE_WARNINGS}));
+            let plan = self.plan_trace_import(&bundle)?;
+            if plan.already_present {
+                return Ok(json!({"attemptsInserted":"0","contentsRetained":"0","importAlreadyPresent":true,"warningCodes":bundle.warnings,"warnings":TRACE_WARNINGS}));
             }
-            let capture = self.get_settings()?["contentCaptureEnabled"] == true;
-            let mut inserted = 0usize;
-            let mut retained = 0usize;
-            for attempt in &attempts {
+            self.migrate_traces()?;
+            for index in &plan.indexes {
+                let attempt = &bundle.attempts[*index];
                 let id = s(&attempt["attemptId"]);
                 let identity = digest(&json!([attempt["threadId"],attempt["turnId"],attempt["inferenceId"]]));
                 let hash = digest(attempt);
-                let old: Option<(String,String,String)> = safe(self.db()?.query_row("SELECT attempt_id,identity,digest FROM trace_tombstones WHERE source_id=? AND (attempt_id=? OR identity=?)", params![source,id,identity], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?))).optional())?;
-                if let Some((old_id,old_identity,old_digest)) = old {
-                    if old_id != id || old_identity != identity || old_digest != hash { return Err(error("trace_identity_conflict")); }
-                    continue;
-                }
-                // One response cannot be counted under two attempts, even after deletion.
                 if let Some(response) = attempt["responseId"].as_str() {
-                    let owner: Option<String> = safe(self.db()?.query_row("SELECT attempt_id FROM trace_response_tombstones WHERE source_id=? AND response_id=?", params![source,response], |row| row.get(0)).optional())?;
-                    if owner.as_deref().is_some_and(|owner| owner != id) { return Err(error("trace_identity_conflict")); }
-                    safe(self.db()?.execute("INSERT OR IGNORE INTO trace_response_tombstones(source_id,response_id,attempt_id) VALUES(?,?,?)",params![source,response,id]))?;
+                    safe(self.db()?.execute("INSERT INTO trace_response_tombstones(source_id,response_id,attempt_id) VALUES(?,?,?)",params![bundle.source,response,id]))?;
                 }
                 let mut metadata = attempt.clone();
                 let map = metadata.as_object_mut().expect("normalized attempt");
                 let request = map.remove("requestProjection").unwrap_or(Value::Null);
                 let response = map.remove("responseProjection").unwrap_or(Value::Null);
-                map.insert("sourceId".into(),json!(source));
-                map.insert("bundleId".into(),json!(bundle));
-                map.insert("importedAt".into(),json!(imported_at));
-                safe(self.db()?.execute("INSERT INTO trace_tombstones(source_id,attempt_id,identity,digest) VALUES(?,?,?,?)",params![source,id,identity,hash]))?;
-                safe(self.db()?.execute("INSERT INTO trace_attempts(source_id,attempt_id,started_at,imported_at,payload) VALUES(?,?,?,?,?)",params![source,id,s(&attempt["startedAt"]),imported_at,metadata.to_string()]))?;
-                inserted += 1;
-                if capture && (!request.is_null() || !response.is_null()) {
-                    safe(self.db()?.execute("INSERT INTO trace_details(source_id,attempt_id,payload) VALUES(?,?,?)",params![source,id,json!({"requestProjection":request,"responseProjection":response}).to_string()]))?;
-                    retained += 1;
+                map.insert("sourceId".into(),json!(bundle.source));
+                map.insert("bundleId".into(),json!(bundle.bundle));
+                map.insert("importedAt".into(),json!(bundle.imported_at));
+                safe(self.db()?.execute("INSERT INTO trace_tombstones(source_id,attempt_id,identity,digest) VALUES(?,?,?,?)",params![bundle.source,id,identity,hash]))?;
+                safe(self.db()?.execute("INSERT INTO trace_attempts(source_id,attempt_id,started_at,imported_at,payload) VALUES(?,?,?,?,?)",params![bundle.source,id,s(&attempt["startedAt"]),bundle.imported_at,metadata.to_string()]))?;
+                if plan.capture && (!request.is_null() || !response.is_null()) {
+                    safe(self.db()?.execute("INSERT INTO trace_details(source_id,attempt_id,payload) VALUES(?,?,?)",params![bundle.source,id,json!({"requestProjection":request,"responseProjection":response}).to_string()]))?;
                 }
             }
-            safe(self.db()?.execute("INSERT INTO trace_imports(source_id,bundle_id,fingerprint,digest,imported_at,warning_codes) VALUES(?,?,?,?,?,?)",params![source,bundle,fingerprint,bundle_digest,imported_at,input["warningCodes"].to_string()]))?;
-            Ok(json!({"attemptsInserted":inserted.to_string(),"contentsRetained":retained.to_string(),"importAlreadyPresent":false,"warningCodes":warnings,"warnings":TRACE_WARNINGS}))
+            safe(self.db()?.execute("INSERT INTO trace_imports(source_id,bundle_id,fingerprint,digest,imported_at,warning_codes) VALUES(?,?,?,?,?,?)",params![bundle.source,bundle.bundle,bundle.fingerprint,bundle.bundle_digest,bundle.imported_at,json!(bundle.warnings).to_string()]))?;
+            Ok(json!({"attemptsInserted":plan.indexes.len().to_string(),"contentsRetained":plan.retained(&bundle).to_string(),"importAlreadyPresent":false,"warningCodes":bundle.warnings,"warnings":TRACE_WARNINGS}))
         })
     }
     pub fn get_trace_attempts(&self, input: &Value) -> CoreResult<Value> {
-        exact_keys(
-            input,
-            &["sourceId", "limit", "cursor", "fromDate", "toDate"],
-        )?;
+        let allowed = ["sourceId", "limit", "cursor", "fromDate", "toDate"]
+            .into_iter()
+            .chain(FILTER_KEYS)
+            .collect::<Vec<_>>();
+        exact_keys(input, &allowed)?;
         let limit = limit(input)?;
-        let (from, to) = optional_range(input)?;
+        let filters = TraceFilters::parse(input)?;
         self.read(|| {
             let source = self.source(&input["sourceId"])?;
             let id = s(&source["id"]);
-            let cursor = self.cursor(input.get("cursor"),id,"traces")?;
+            let cursor = filters.cursor(input.get("cursor"),id)?;
             let mut records = Vec::new();
             let mut next = None;
             if self.has_trace_schema()? {
-                let at = cursor.as_ref().map(|(at,_)|at.as_str());
-                let key = cursor.as_ref().map(|(_,key)|key.as_str());
-                let mut statement = safe(self.db()?.prepare("SELECT a.payload,a.started_at,a.attempt_id,d.attempt_id IS NOT NULL FROM trace_attempts a LEFT JOIN trace_details d ON d.source_id=a.source_id AND d.attempt_id=a.attempt_id WHERE a.source_id=? AND (? IS NULL OR substr(a.started_at,1,10) BETWEEN ? AND ?) AND (? IS NULL OR a.started_at<? OR (a.started_at=? AND a.attempt_id<?)) ORDER BY a.started_at DESC,a.attempt_id DESC LIMIT ?"))?;
-                let mut rows = safe(statement.query(params![id,from,from,to,at,at,at,key,limit+1]))?;
+                let mut parameters = filters.params(id);
+                parameters.push(cursor.as_ref().map(|(at,_)|at.clone()).into());
+                parameters.push(cursor.as_ref().map(|(_,key)|key.clone()).into());
+                parameters.push((limit+1).into());
+                let sql = format!("SELECT a.payload,a.started_at,a.attempt_id,d.attempt_id IS NOT NULL FROM trace_attempts a LEFT JOIN trace_details d ON d.source_id=a.source_id AND d.attempt_id=a.attempt_id WHERE {FILTER_SQL} AND (?9 IS NULL OR a.started_at<?9 OR (a.started_at=?9 AND a.attempt_id<?10)) ORDER BY a.started_at DESC,a.attempt_id DESC LIMIT ?11");
+                let mut statement = safe(self.db()?.prepare(&sql))?;
+                let mut rows = safe(statement.query(rusqlite::params_from_iter(parameters)))?;
                 let mut last: Option<(String, String)> = None;
                 while let Some(row) = safe(rows.next())? {
                     if records.len() == limit as usize {
-                        if let Some((at,key)) = last { next = Some(self.encode_cursor(id,"traces",&at,&key)); }
+                        if let Some((at,key)) = last { next = Some(filters.encode_cursor(id,&at,&key)); }
                         break;
                     }
                     let mut value = parse(safe(row.get(0))?)?;
@@ -419,7 +556,9 @@ impl UsageStore {
                     last = Some((safe(row.get::<_,String>(1))?,safe(row.get::<_,String>(2))?));
                 }
             }
-            self.with_trace_warnings(id,json!({"source":source,"attempts":records,"nextCursor":next,"fromDate":from,"toDate":to,"coverage":self.trace_coverage(id)?,"warnings":TRACE_WARNINGS}))
+            let mut result = json!({"source":source,"attempts":records,"nextCursor":next,"coverage":self.trace_coverage(id)?,"warnings":TRACE_WARNINGS});
+            filters.echo(&mut result);
+            self.with_trace_warnings(id,result)
         })
     }
     pub fn get_local_trace_detail(&self, input: &Value) -> CoreResult<Value> {
@@ -434,49 +573,106 @@ impl UsageStore {
         })
     }
     pub fn get_trace_summary(&self, input: &Value) -> CoreResult<Value> {
-        exact_keys(input, &["sourceId", "fromDate", "toDate"])?;
-        let (from, to) = optional_range(input)?;
+        let allowed = ["sourceId", "fromDate", "toDate"]
+            .into_iter()
+            .chain(FILTER_KEYS)
+            .collect::<Vec<_>>();
+        exact_keys(input, &allowed)?;
+        let filters = TraceFilters::parse(input)?;
         self.read(|| {
             let source = self.source(&input["sourceId"])?;
             let id = s(&source["id"]);
             let mut total = Totals::default();
-            let mut status: BTreeMap<String,Totals> = BTreeMap::new();
-            let mut groups: [BTreeMap<(String,String),Totals>;5] = std::array::from_fn(|_|BTreeMap::new());
+            let mut status: BTreeMap<String, Totals> = BTreeMap::new();
+            let mut groups: [BTreeMap<(String, String), Totals>; 5] =
+                std::array::from_fn(|_| BTreeMap::new());
             let mut groups_truncated = false;
             if self.has_trace_schema()? {
-                let mut statement = safe(self.db()?.prepare("SELECT payload FROM trace_attempts WHERE source_id=? AND (? IS NULL OR substr(started_at,1,10) BETWEEN ? AND ?)"))?;
-                let mut rows = safe(statement.query(params![id,from,from,to]))?;
+                let sql = format!("SELECT a.payload FROM trace_attempts a WHERE {FILTER_SQL}");
+                let mut statement = safe(self.db()?.prepare(&sql))?;
+                let mut rows =
+                    safe(statement.query(rusqlite::params_from_iter(filters.params(id))))?;
                 while let Some(row) = safe(rows.next())? {
                     let value = parse(safe(row.get(0))?)?;
                     total.add(&value);
-                    status.entry(s(&value["status"]).to_owned()).or_default().add(&value);
-                    for (index,(section,key)) in [("request","model"),("request","reasoningEffort"),("request","serviceTier"),("observed","model"),("observed","serviceTier")].iter().enumerate() {
+                    status
+                        .entry(s(&value["status"]).to_owned())
+                        .or_default()
+                        .add(&value);
+                    for (index, (section, key)) in [
+                        ("request", "model"),
+                        ("request", "reasoningEffort"),
+                        ("request", "serviceTier"),
+                        ("observed", "model"),
+                        ("observed", "serviceTier"),
+                    ]
+                    .iter()
+                    .enumerate()
+                    {
                         let cell = &value[section][key];
-                        let key = (s(&cell["state"]).to_owned(),s(&cell["value"]).to_owned());
+                        let key = (s(&cell["state"]).to_owned(), s(&cell["value"]).to_owned());
                         let group = &mut groups[index];
                         if !group.contains_key(&key) && group.len() == 500 {
                             groups_truncated = true;
                             // Keep the lexicographically smallest keys while streaming. The
                             // threshold only decreases, so every retained group has complete counts.
-                            if group.last_key_value().is_some_and(|(last,_)| &key < last) { group.pop_last(); }
-                            else { continue; }
+                            if group.last_key_value().is_some_and(|(last, _)| &key < last) {
+                                group.pop_last();
+                            } else {
+                                continue;
+                            }
                         }
                         group.entry(key).or_default().add(&value);
                     }
                 }
             }
             let mut result = total.value();
-            result.as_object_mut().expect("totals object").remove("count");
+            result
+                .as_object_mut()
+                .expect("totals object")
+                .remove("count");
             result["attemptCount"] = json!(total.count.to_string());
             result["groupsTruncated"] = json!(groups_truncated);
-            result["byStatus"] = Value::Array(status.iter().map(|(status,total)|{let mut value=total.value();value["status"]=json!(status);value}).collect());
-            for (name,group) in ["byRequestedModel","byRequestedReasoningEffort","byRequestedServiceTier","byObservedModel","byObservedServiceTier"].iter().zip(groups) {
-                result[name] = Value::Array(group.into_iter().map(|((state,text),total)|{let mut value=total.value();value["value"]=if state=="reported"{json!(text)}else{Value::Null};value["state"]=json!(state);value}).collect());
+            result["byStatus"] = Value::Array(
+                status
+                    .iter()
+                    .map(|(status, total)| {
+                        let mut value = total.value();
+                        value["status"] = json!(status);
+                        value
+                    })
+                    .collect(),
+            );
+            for (name, group) in [
+                "byRequestedModel",
+                "byRequestedReasoningEffort",
+                "byRequestedServiceTier",
+                "byObservedModel",
+                "byObservedServiceTier",
+            ]
+            .iter()
+            .zip(groups)
+            {
+                result[name] = Value::Array(
+                    group
+                        .into_iter()
+                        .map(|((state, text), total)| {
+                            let mut value = total.value();
+                            value["value"] = if state == "reported" {
+                                json!(text)
+                            } else {
+                                Value::Null
+                            };
+                            value["state"] = json!(state);
+                            value
+                        })
+                        .collect(),
+                );
             }
-            result["fromDate"]=json!(from);result["toDate"]=json!(to);
-            result["coverage"]=self.trace_coverage(id)?;
-            result["warnings"]=json!(TRACE_WARNINGS);
-            self.with_trace_warnings(id,result)
+            filters.echo(&mut result);
+            result["coverage"] = self.trace_coverage(id)?;
+            result["warnings"] = json!(TRACE_WARNINGS);
+            self.with_trace_warnings(id, result)
         })
     }
 }

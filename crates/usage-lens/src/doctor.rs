@@ -46,6 +46,34 @@ fn check(id: &str, status: &str, code: &str, action: &str) -> Value {
     json!({"id":id,"status":status,"code":code,"nextStep":action})
 }
 
+fn compatibility(selected_schema: Option<u64>) -> Value {
+    json!({
+        "readableSchemas":[2,3,4],
+        "requiredJournalMode":"rollback",
+        "selectedSchema":selected_schema,
+        "traceImportTargetSchema":4,
+        "wouldUpgrade":selected_schema.map(|schema| schema < 4),
+        "upgradeTrigger":"successful_explicit_trace_import",
+        "backupStatus":"not_verified",
+        "rollbackWarning":"A successful trace import upgrades schema 2/3 to 4. v0.5.0 and older cannot read schema 4; v0.3.0 and older cannot read schema 3. Replacing the binary does not reverse an upgrade. Never open an upgraded store with an incompatible older binary or change schema numbers to bypass compatibility checks.",
+        "backupSteps":[
+            "Before a write or upgrade, stop every dashboard server, MCP process, hook writer and collector using the selected store.",
+            "Make a private backup of the closed store outside the installation directory and synced folders. Preserve any remaining SQLite journal sidecars with it, or use a documented SQLite backup operation; never copy only the main file of an active WAL database.",
+            "Verify the backup is readable with a compatible binary and keep the pre-upgrade backup unchanged. This diagnostic neither creates nor verifies a backup.",
+            "For rollback, use a separate compatible copy of the pre-upgrade backup. Do not overwrite the current store; newer evidence is absent from that older copy."
+        ],
+        "scope":"selected_store_schema_only"
+    })
+}
+
+fn database_next_step(code: &str) -> &'static str {
+    if code == "unsupported_schema" {
+        "This executable reads schemas 2, 3 and 4 only. Use a binary documented for the selected store, or a separate compatible pre-upgrade backup. Do not edit schema numbers, open it with an incompatible older binary, or migrate the only copy."
+    } else {
+        "Check the selected existing database path and read permission. Only rollback-journal stores are supported; missing, unreadable, malformed or WAL stores can report storage_error. Stop writers and use a verified compatible backup; do not create a replacement, convert journaling or repair the only copy."
+    }
+}
+
 /// The caller validates absolute paths and option combinations. Failed store reads are
 /// diagnostics, not a request to create/migrate/repair the selected database.
 pub fn report(database: Option<&Path>, source: Option<&str>, max_age_ms: Option<u64>) -> Value {
@@ -87,14 +115,16 @@ pub fn report_with_dashboard(
     ];
     let mut store_info = Value::Null;
     let mut source_health = Value::Null;
+    let mut selected_schema = None;
     if let Some(path) = database {
         match UsageStore::open_read_only(path).and_then(|store| {
             let status = store.get_status()?;
             Ok((store, status))
         }) {
             Ok((store, status)) => {
+                selected_schema = status["schemaVersion"].as_u64();
                 store_info = json!({"schemaVersion":status["schemaVersion"],"sourceCount":status["sources"].as_array().map_or(0, Vec::len).to_string(),"accessMode":"read_only","journalMode":"rollback"});
-                checks.push(check("database", "pass", "existing_store_readable", "Select a source explicitly to inspect its recorded evidence."));
+                checks.push(check("database", "pass", "existing_store_readable", "Review compatibility and backupSteps before any explicit import; no backup has been checked. Select a source explicitly to inspect its recorded evidence."));
                 if let Some(source) = source {
                     let mut input = json!({"sourceId":source});
                     if let Some(age) = max_age_ms {
@@ -108,10 +138,20 @@ pub fn report_with_dashboard(
                         Err(error) => checks.push(check("source", "fail", error.code(), "Use the exact intended source ID from status. Do not substitute another source or collect automatically.")),
                     }
                 } else {
-                    checks.push(check("source", "not_checked", "source_not_selected", "Run status, then pass the explicitly selected source ID with --source."));
+                    checks.push(check(
+                        "source",
+                        "not_checked",
+                        "source_not_selected",
+                        "Run status, then pass the explicitly selected source ID with --source.",
+                    ));
                 }
             }
-            Err(error) => checks.push(check("database", "fail", error.code(), "Check the explicitly selected existing database and its documented schema/journal compatibility. This diagnostic does not repair or migrate data.")),
+            Err(error) => checks.push(check(
+                "database",
+                "fail",
+                error.code(),
+                database_next_step(error.code()),
+            )),
         }
     } else {
         checks.push(check("database", "not_checked", "database_not_selected", "Pass --db with the authorized existing absolute database path; do not search for private records."));
@@ -123,12 +163,14 @@ pub fn report_with_dashboard(
         "application":{"name":"usage-lens","version":env!("CARGO_PKG_VERSION"),"binaryOs":std::env::consts::OS,"binaryArch":std::env::consts::ARCH},
         "status":if failed {"failed"} else if incomplete {"incomplete"} else {"ready"},
         "checks":checks,"database":store_info,"sourceHealth":source_health,
+        "compatibility":compatibility(selected_schema),
         "scope":"read_only_setup_diagnostics",
         "warnings":[
             "Checks describe this executable and only the explicitly selected store. They do not prove installation in a real client, browser compatibility, account access, or complete collection.",
             "Binary architecture may differ from physical hardware under emulation. Verify the release asset against the actual machine before installation.",
             "No collector, subprocess, network request, directory scan, credential read, installation, or background registration is performed.",
-            "Setup readiness does not imply fresh or complete data. Collection time and provider data freshness are separate measurements."
+            "Setup readiness does not imply fresh or complete data. Collection time and provider data freshness are separate measurements.",
+            "Compatibility describes supported local store schemas, not a validated trace bundle or live desktop runtime. wouldUpgrade is null when the selected store could not be read; doctor never imports, migrates, creates or verifies backups."
         ]
     })
 }

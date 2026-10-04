@@ -39,7 +39,10 @@ pub fn mount() {
         let modal_revision = RwSignal::new(0u64);
         let send = Callback::new(move |action: Action| {
             let (main_repaint, repaint) = action.repaint();
-            if matches!(action, Action::Select(..) | Action::Confirm(..)) {
+            if matches!(
+                action,
+                Action::Select(..) | Action::Confirm(..) | Action::TraceThread { .. }
+            ) {
                 PREVIOUS_FOCUS.with_borrow_mut(|previous| {
                     *previous = web_sys::window()
                         .and_then(|w| w.document())
@@ -173,7 +176,16 @@ fn synchronize(state: RwSignal<State>) {
             }
         } else {
             PREVIOUS_FOCUS.with_borrow_mut(|previous| {
-                if let Some(element) = previous.take().filter(|e| e.is_connected()) {
+                if let Some(element) = previous.take().and_then(|element| {
+                    if element.is_connected() {
+                        Some(element)
+                    } else {
+                        document
+                            .get_element_by_id("main-content")?
+                            .dyn_into::<HtmlElement>()
+                            .ok()
+                    }
+                }) {
                     let _ = element.focus();
                 }
             });

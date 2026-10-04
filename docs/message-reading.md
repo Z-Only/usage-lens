@@ -120,5 +120,5 @@ response-token period fields above remain `not_recorded`; importing trace metada
 does not fabricate joins into that response population. Trace requests are not
 universal exact-wire evidence or delivery/billing proof. The new schema-4 upgrade
 happens only on successful explicit trace import and requires a backup; v0.5.0 and
-older cannot read that upgraded store. v0.6.0 queries still read schema 2/3 without
+older cannot read that upgraded store. v0.7.0 queries still read schema 2/3 without
 migration. The eight conversational CLI/MCP aggregate allowlists remain unchanged.
