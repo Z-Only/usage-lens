@@ -134,6 +134,21 @@ class NativePluginExamplesTests(unittest.TestCase):
         self.assertGreaterEqual(len(assets), 4)
         self.assertEqual(set(assets), {version})
 
+    def test_install_directory_examples_follow_the_selected_release(self):
+        version = json.loads((ROOT / 'package.json').read_text())['version']
+        guide = (ROOT / 'docs/AI_INSTALL.md').read_text()
+        for placeholder in ['~/.local/share/usage-lens/<version>/',
+                            '%LOCALAPPDATA%\\UsageLens\\<version>\\']:
+            self.assertIn(f'`{placeholder}`', guide)
+        self.assertIn('exact selected, verified release version from step 2', guide)
+        self.assertIn('record the actual absolute installation directory', guide)
+        self.assertIn('use the verified extracted directory', guide)
+        # Include POSIX/Windows convenience paths, archive names and both Skill
+        # copy roots, without treating historical schema warnings as install paths.
+        paths = re.findall(r'(?:usage-lens[-/\\]|UsageLens\\)([0-9]+\.[0-9]+\.[0-9]+)', guide)
+        self.assertGreaterEqual(len(paths), 6)
+        self.assertEqual(set(paths), {version})
+
     def test_install_contract_is_local_skill_first_with_client_limits(self):
         guide = (ROOT / 'docs/AI_INSTALL.md').read_text()
         primary = guide.index('## 6. Primary conversational integration: Skill + local CLI')

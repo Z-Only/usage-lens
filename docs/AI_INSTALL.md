@@ -75,7 +75,16 @@ Read the verified manifest as data. Require:
 
 List archive contents with `tar -tzf ASSET` and `tar -tvzf ASSET` (Windows: `tar.exe`). Every member must be a regular file inside the single expected `usage-lens-VERSION-PLATFORM/` directory. Reject absolute paths, `..`, links, devices, unexpected executables, databases, logs, credentials, or install scripts. Extract into a **new, empty user-owned directory**, never on top of an existing installation. Compare the internal `manifest.json` with the verified sidecar. Before execution, compare the extracted executable's SHA-256 to its `files` entry too (`shasum -a 256`, `sha256sum`, or `Get-FileHash`). Retain the checksums and manifest with the installation record.
 
-A convenient final directory is `~/.local/share/usage-lens/0.4.0/` on macOS/Linux or `%LOCALAPPDATA%\UsageLens\0.4.0\` on Windows. Do not require administrator access. Leave previous versions in their own directories. Do not edit PATH or add a startup service unless separately requested.
+Suggested final directories are `~/.local/share/usage-lens/<version>/` on
+macOS/Linux or `%LOCALAPPDATA%\UsageLens\<version>\` on Windows. Replace
+`<version>` with the exact selected, verified release version from step 2; do not
+use the placeholder literally. Expand the home/profile variable on the selected
+computer and record the actual absolute installation directory. For the following
+commands, use the verified extracted directory that contains the executable and
+`plugin/`; if extraction leaves a version/platform subdirectory, use that actual
+subdirectory rather than guessing a path. Do not require administrator access.
+Leave previous versions in their own directories. Do not edit PATH or add a
+startup service unless separately requested.
 
 ## 4. Verify setup and the isolated synthetic demo
 
