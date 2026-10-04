@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import { captureOverflowDiagnostics } from "./layout-diagnostics";
+import { captureOverflowDiagnostics, prepareFullPageCapture, recordHiddenSkipLink } from "./layout-diagnostics";
 
 type FixtureSet = {
   status: { sources: { id: string; displayName: string; mode: string }[] };
@@ -10,25 +10,6 @@ const fixtures = JSON.parse(
   readFileSync("crates/usage-lens-ui/tests/fixtures.json", "utf8"),
 ) as FixtureSet;
 
-async function recordHiddenSkipLink(page: Page, testInfo: TestInfo, name: string) {
-  const link = page.locator("a.skip-link");
-  await expect(link).not.toBeFocused();
-  const geometry = await link.evaluate(element => {
-    const rect = element.getBoundingClientRect();
-    return {
-      focused: element === document.activeElement,
-      position: getComputedStyle(element).position,
-      top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right,
-      viewport: { width: innerWidth, height: innerHeight },
-      scroll: { x: scrollX, y: scrollY },
-    };
-  });
-  expect(geometry.focused).toBe(false);
-  expect(geometry.bottom).toBeLessThanOrEqual(0);
-  await testInfo.attach(`${name}-skip-link-geometry`, {
-    body: JSON.stringify(geometry, null, 2), contentType: "application/json",
-  });
-}
 
 // Every record is synthetic. Routes remain same-origin and do not touch real collectors.
 function health(sourceId: string) {
@@ -138,9 +119,7 @@ test("source health handles retry, interrupted source switching, and honest cove
   };
   await noOverflow();
   const englishScreenshot = testInfo.outputPath("health-en-light.png");
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await expect.poll(() => page.evaluate(() => ({ x: scrollX, y: scrollY }))).toEqual({ x: 0, y: 0 });
-  await recordHiddenSkipLink(page, testInfo, "health-en-light");
+  await prepareFullPageCapture(page, testInfo, "health-en-light");
   // Oversized locator screenshots can recenter fixed offscreen controls into the crop.
   // Full-page capture must start at the document origin so fixed UI is positioned normally.
   // Keep application CSS intact and do not mask real elements.
@@ -163,9 +142,7 @@ test("source health handles retry, interrupted source switching, and honest cove
   await expect(chinesePanel).toContainText("缺失记录：未知");
   await noOverflow();
   const chineseScreenshot = testInfo.outputPath("health-zh-dark.png");
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await expect.poll(() => page.evaluate(() => ({ x: scrollX, y: scrollY }))).toEqual({ x: 0, y: 0 });
-  await recordHiddenSkipLink(page, testInfo, "health-zh-dark");
+  await prepareFullPageCapture(page, testInfo, "health-zh-dark");
   await page.screenshot({ path: chineseScreenshot, fullPage: true });
   await testInfo.attach("health-zh-dark", { path: chineseScreenshot, contentType: "image/png" });
   expect(pageErrors).toEqual([]);

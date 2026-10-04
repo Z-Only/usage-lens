@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
-import { captureOverflowDiagnostics } from "./layout-diagnostics";
+import { captureOverflowDiagnostics, prepareFullPageCapture } from "./layout-diagnostics";
 
 type Cell = { state: string; value: string | null };
 type Attempt = {
@@ -358,7 +358,12 @@ for (const locale of ["en", "zh"] as const) {
     await expect(page.locator(".trace-reader .trace-exact-scope")).toContainText(submitted.requestedModel.trim());
     await expect(page.locator(".trace-draft-notice")).toBeHidden();
     await noOverflow(page, testInfo);
-    await page.screenshot({ path: testInfo.outputPath(`trace-exact-filters-${locale}.png`), fullPage: true });
+    await expect(tier).toBeFocused();
+    await prepareFullPageCapture(page, testInfo, `trace-exact-filters-${locale}`);
+    await expect(tier).toBeFocused();
+    const filterScreenshot = testInfo.outputPath(`trace-exact-filters-${locale}.png`);
+    await page.screenshot({ path: filterScreenshot, fullPage: true });
+    await testInfo.attach(`trace-exact-filters-${locale}`, { path: filterScreenshot, contentType: "image/png" });
     await model.fill("draft-only"); await thread.fill("draft-thread"); await status.selectOption("failed");
     await page.getByRole("button", { name: text("Load more traces", "加载更多追踪"), exact: true }).click();
     await expect(page.locator(".trace-attempt")).toHaveCount(2);
@@ -403,6 +408,14 @@ for (const locale of ["en", "zh"] as const) {
     await expect(thread).toHaveValue("synthetic-thread");
     await expect(page.locator("#main-content")).toBeFocused();
     await expect(page.locator(".trace-summary .trace-exact-scope")).toContainText("synthetic-thread");
+    await expect(page.locator(".trace-reader .trace-exact-scope")).toContainText("synthetic-thread");
+    await expect(page.locator(".trace-attempt")).toHaveCount(1);
+    await noOverflow(page, testInfo);
+    await prepareFullPageCapture(page, testInfo, `trace-thread-navigation-${locale}`);
+    await expect(page.locator("#main-content")).toBeFocused();
+    const threadScreenshot = testInfo.outputPath(`trace-thread-navigation-${locale}.png`);
+    await page.screenshot({ path: threadScreenshot, fullPage: true });
+    await testInfo.attach(`trace-thread-navigation-${locale}`, { path: threadScreenshot, contentType: "image/png" });
     for (const value of ["failed", "cancelled", "incomplete", "completed"]) {
       await status.selectOption(value); await apply.click();
       await expect(page.locator(".trace-attempt .state-label")).toHaveText(text(
