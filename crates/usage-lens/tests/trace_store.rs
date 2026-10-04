@@ -423,10 +423,11 @@ fn summaries_keep_requested_observed_unknowns_and_exact_token_evidence_separate(
     assert_eq!(reported["value"], "future-model");
     assert_eq!(reported["totals"]["inputTokens"], "18446744073709551614");
     assert_ne!(summary["byRequestedModel"], summary["byObservedModel"]);
+    assert!(summary["threadId"].is_null());
     let text = summary.to_string();
+    assert!(!text.contains("\"thread\""));
     for forbidden in [
         "sourceId",
-        "threadId",
         "turnId",
         "inferenceId",
         "attemptId",
@@ -800,12 +801,13 @@ fn import_warning_metadata_survives_read_only_retention_and_data_deletion() {
         "0"
     );
     assert_eq!(summary(&store)["importWarnings"], expected);
+    assert!(summary(&store)["threadId"].is_null());
     let text = summary(&store).to_string();
+    assert!(!text.contains("\"thread\""));
     for forbidden in [
         "warnings.sqlite",
         "fingerprint",
         "bundleId",
-        "threadId",
         "requestProjection",
         "VISIBLE SENTINEL",
     ] {
@@ -1120,4 +1122,222 @@ fn exact_normalized_and_message_count_boundaries_are_supported_for_both_capture_
             capture
         );
     }
+}
+
+#[test]
+fn preflight_predicts_shared_acceptance_without_migration_or_content_exposure() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("synthetic-preview.sqlite");
+    let store = UsageStore::open(&path).unwrap();
+    source(&store, "synthetic", "imported");
+    let input = bundle(
+        "preview-bundle",
+        vec![attempt("preview-one"), attempt("preview-two")],
+    );
+    for schema in [2, 3, 4] {
+        if schema == 3 {
+            import_incremental_rollout(&store,b"",&json!({"sourceId":"synthetic","streamId":"empty","observedAt":NOW,"sourceVersion":ROLLOUT_SOURCE_VERSION})).unwrap();
+        }
+        if schema == 4 {
+            store
+                .import_trace_bundle(&bundle("empty-upgrade", vec![]))
+                .unwrap();
+        }
+        for capture in [false, true] {
+            store
+                .update_settings(&json!({"contentCaptureEnabled":capture}))
+                .unwrap();
+            let before = std::fs::read(&path).unwrap();
+            let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+            let ro = UsageStore::open_read_only(&path).unwrap();
+            let preview = ro.preflight_trace_bundle(&input).unwrap();
+            assert_eq!(preview["dryRun"], true);
+            assert_eq!(preview["operation"], "trace_import_preflight");
+            assert_eq!(preview["status"], "ready");
+            assert_eq!(preview["attemptsInBundle"], "2");
+            assert_eq!(preview["attemptsWouldInsert"], "2");
+            assert_eq!(preview["attemptsAlreadyPresent"], "0");
+            assert_eq!(
+                preview["contentsWouldRetain"],
+                if capture { "2" } else { "0" }
+            );
+            assert_eq!(preview["database"]["schemaVersion"], schema);
+            assert_eq!(preview["database"]["wouldUpgrade"], schema < 4);
+            assert_eq!(preview["database"]["accessMode"], "read_only");
+            for secret in [
+                "VISIBLE SENTINEL",
+                "RESPONSE SENTINEL",
+                "preview-one",
+                "preview-bundle",
+                "threadId",
+                "responseId",
+                "fingerprint",
+                "synthetic-preview.sqlite",
+            ] {
+                assert!(!preview.to_string().contains(secret), "{secret}");
+            }
+            drop(ro);
+            assert_eq!(before, std::fs::read(&path).unwrap());
+            assert_eq!(
+                modified,
+                std::fs::metadata(&path).unwrap().modified().unwrap()
+            );
+            assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+            assert_eq!(version(&store), schema);
+            assert_eq!(all(&store)["attempts"], json!([]));
+        }
+    }
+    let preview = store.preflight_trace_bundle(&input).unwrap();
+    let accepted = store.import_trace_bundle(&input).unwrap();
+    assert_eq!(preview["attemptsWouldInsert"], accepted["attemptsInserted"]);
+    assert_eq!(preview["contentsWouldRetain"], accepted["contentsRetained"]);
+    let duplicate = store.preflight_trace_bundle(&input).unwrap();
+    assert_eq!(duplicate["importAlreadyPresent"], true);
+    assert_eq!(duplicate["attemptsWouldInsert"], "0");
+    assert_eq!(duplicate["attemptsAlreadyPresent"], "2");
+    assert_eq!(duplicate["contentsWouldRetain"], "0");
+    store.clear_data(&json!({"sourceId":"synthetic"})).unwrap();
+    assert_eq!(store.preflight_trace_bundle(&input).unwrap(), duplicate);
+    let overlap = bundle(
+        "overlapping-bundle",
+        vec![attempt("preview-one"), attempt("new-one")],
+    );
+    let preview = store.preflight_trace_bundle(&overlap).unwrap();
+    assert_eq!(preview["importAlreadyPresent"], false);
+    assert_eq!(preview["attemptsAlreadyPresent"], "1");
+    assert_eq!(preview["attemptsWouldInsert"], "1");
+    assert_eq!(
+        store.import_trace_bundle(&overlap).unwrap()["attemptsInserted"],
+        "1"
+    );
+}
+
+#[test]
+fn preflight_rejects_same_conflicts_as_import_and_rechecks_changed_settings() {
+    let store = store();
+    let input = bundle("bundle", vec![attempt("one")]);
+    store.preflight_trace_bundle(&input).unwrap();
+    store
+        .update_settings(&json!({"capturePaused":true}))
+        .unwrap();
+    for preview in [true, false] {
+        let error = if preview {
+            store.preflight_trace_bundle(&input)
+        } else {
+            store.import_trace_bundle(&input)
+        }
+        .unwrap_err();
+        assert_eq!(error.code(), "capture_paused");
+        assert_eq!(version(&store), 2);
+    }
+    store
+        .update_settings(&json!({"capturePaused":false}))
+        .unwrap();
+    let mut cases = Vec::new();
+    let mut duplicate_id = attempt("one");
+    duplicate_id["request"]["model"] = reported("changed");
+    cases.push(vec![attempt("one"), duplicate_id]);
+    let mut duplicate_identity = attempt("two");
+    duplicate_identity["inferenceId"] = json!("one");
+    cases.push(vec![attempt("one"), duplicate_identity]);
+    let mut duplicate_response = attempt("two");
+    duplicate_response["responseId"] = json!("response-one");
+    cases.push(vec![attempt("one"), duplicate_response]);
+    for attempts in cases {
+        let conflict = bundle("conflict", attempts);
+        assert_eq!(
+            store.preflight_trace_bundle(&conflict).unwrap_err().code(),
+            "trace_identity_conflict"
+        );
+        assert_eq!(
+            store.import_trace_bundle(&conflict).unwrap_err().code(),
+            "trace_identity_conflict"
+        );
+        assert_eq!(version(&store), 2);
+    }
+    let repeated = bundle("exact-duplicate", vec![attempt("one"), attempt("one")]);
+    let preview = store.preflight_trace_bundle(&repeated).unwrap();
+    assert_eq!(preview["attemptsInBundle"], "2");
+    assert_eq!(preview["attemptsWouldInsert"], "1");
+    assert_eq!(preview["attemptsAlreadyPresent"], "1");
+    assert_eq!(
+        store.import_trace_bundle(&repeated).unwrap()["attemptsInserted"],
+        "1"
+    );
+    let mut conflict = repeated.clone();
+    conflict["fingerprint"] = json!("f".repeat(64));
+    assert_eq!(
+        store.preflight_trace_bundle(&conflict).unwrap_err().code(),
+        "trace_identity_conflict"
+    );
+    let mut stale = attempt("one");
+    stale["request"]["model"] = reported("changed");
+    assert_eq!(
+        store
+            .preflight_trace_bundle(&bundle("changed-attempt", vec![stale]))
+            .unwrap_err()
+            .code(),
+        "trace_identity_conflict"
+    );
+    let mut claimed_response = attempt("three");
+    claimed_response["responseId"] = json!("response-one");
+    assert_eq!(
+        store
+            .preflight_trace_bundle(&bundle("changed-response", vec![claimed_response]))
+            .unwrap_err()
+            .code(),
+        "trace_identity_conflict"
+    );
+    let mut missing = input.clone();
+    missing["sourceId"] = json!("missing");
+    assert_eq!(
+        store.preflight_trace_bundle(&missing).unwrap_err().code(),
+        "source_not_found"
+    );
+    source(&store, "live", "live");
+    missing["sourceId"] = json!("live");
+    assert_eq!(
+        store.preflight_trace_bundle(&missing).unwrap_err().code(),
+        "imported_source_required"
+    );
+    let mut invalid = input;
+    invalid["unknown"] = json!(true);
+    assert_eq!(
+        store.preflight_trace_bundle(&invalid).unwrap_err().code(),
+        "invalid_input"
+    );
+}
+
+#[test]
+fn preflight_does_not_reserve_acceptance_or_restore_deleted_content() {
+    let store = store();
+    let input = bundle("later", vec![attempt("one")]);
+    assert_eq!(
+        store.preflight_trace_bundle(&input).unwrap()["attemptsWouldInsert"],
+        "1"
+    );
+    let mut competing = attempt("one");
+    competing["request"]["model"] = reported("changed-since-preview");
+    store
+        .import_trace_bundle(&bundle("first", vec![competing]))
+        .unwrap();
+    let retained = all(&store);
+    assert_eq!(
+        store.import_trace_bundle(&input).unwrap_err().code(),
+        "trace_identity_conflict"
+    );
+    assert_eq!(all(&store), retained);
+    store
+        .update_settings(&json!({"contentCaptureEnabled":true}))
+        .unwrap();
+    let input = bundle("captured", vec![attempt("two")]);
+    store.import_trace_bundle(&input).unwrap();
+    store
+        .clear_local_content(&json!({"sourceId":"synthetic"}))
+        .unwrap();
+    let preview = store.preflight_trace_bundle(&input).unwrap();
+    assert_eq!(preview["contentCaptureEnabled"], true);
+    assert_eq!(preview["contentsWouldRetain"], "0");
+    assert_eq!(preview["attemptsWouldInsert"], "0");
+    assert_eq!(detail(&store, "two")["contentRetained"], false);
 }

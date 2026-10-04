@@ -157,24 +157,33 @@ Skill metrics distinguish requested, read/loaded, and explicitly recorded invoca
 
 ## Selected local trace bundles
 
-v0.6.0 adds a bounded, one-shot importer for the public Codex `rust-v0.160.0`
-RolloutTrace contract. **Stop writers and back up an existing store before its
+v0.7.0 adds a read-only import preview, exact trace filters and actionable schema/
+backup diagnostics to the bounded, one-shot importer introduced in v0.6.0 for the
+public Codex `rust-v0.160.0` RolloutTrace contract. **Stop writers and back up an existing store before its
 first trace import:** success upgrades schema 2/3 to schema 4; v0.5.0 and older
 cannot read schema 4. Queries never migrate an older store.
 
 ```sh
-usage-lens import-trace-bundle --db "$HOME/.usage-lens/usage.sqlite" \
-  --source local-records --directory /absolute/path/to/selected-trace-bundle \
+'/ABSOLUTE/usage-lens' doctor --db '/ABSOLUTE/private/usage.sqlite' --source 'SOURCE'
+'/ABSOLUTE/usage-lens' import-trace-bundle --dry-run --db '/ABSOLUTE/private/usage.sqlite' \
+  --source 'SOURCE' --directory '/ABSOLUTE/private/selected-trace-bundle' \
   --source-version a956835d020762cb2b570053af06f643a11c0ecc
 ```
+
+Replace these placeholders with the selected existing store, source and stable
+bundle. The preview reports counts, replay, schema-4 upgrade and content-capture
+consequences without writing; future changes can invalidate it. It neither makes
+nor verifies a backup. After approval for the write and a verified closed-store
+backup, rerun the same import command without `--dry-run`.
 
 Only the chosen bundle's manifest, trace events and validated referenced payloads
 are read. No discovery, watcher, client configuration, installation, process
 startup or model request occurs. `trace-attempts`, `trace-detail` and
 `trace-summary` are separate local queries, outside the Skill/MCP allowlists.
-The bilingual Traces page uses the same local evidence, with paired UTC date
-filters and a Monday–Sunday UTC-week preset. That calendar week is not a quota
-cycle. Optional visible text is a redacted projection; raw files remain untouched.
+The bilingual Traces page uses the same local evidence and exact thread, status,
+requested-model, requested-effort and requested-tier filters as the local CLI/HTTP
+queries, with paired UTC dates and a Monday–Sunday UTC-week preset. That calendar
+week is not a quota cycle. Optional visible text is a redacted projection; raw files remain untouched.
 
 A trace request is prepared-request evidence, recorded before transmission; a
 WebSocket warmup can produce logical full input rather than exact wire bytes.
@@ -226,7 +235,7 @@ No model, success, unique-execution, or per-skill token attribution is inferred.
 The local `skills` evidence command is outside this conversational allowlist.
 The instruction-level allowlist is not an OS sandbox. Persisted queries open an
 existing schema-2, schema-3 or schema-4 rollback-journal store read-only; normal
-older schema-2/3 databases remain query-compatible without migration in v0.6.0. Queries
+older schema-2/3 databases remain query-compatible without migration in v0.7.0. Queries
 fail rather than create or migrate a store. Incremental import is a separate
 explicit write workflow, outside the Skill's eight-command allowlist and optional
 MCP tools. It does not install a background process or make collection automatic.

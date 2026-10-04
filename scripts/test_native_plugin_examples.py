@@ -218,6 +218,42 @@ class NativePluginExamplesTests(unittest.TestCase):
                       'Import/deletion changed raw source files']:
             self.assertIn(check, smoke)
 
+    def test_trace_preflight_filters_and_doctor_are_local_workflows(self):
+        guide = (ROOT / 'docs/trace-import.md').read_text()
+        for phrase in [
+            'import-trace-bundle --dry-run', 'existing', 'read-only',
+            'attemptsWouldInsert', 'attemptsAlreadyPresent', 'contentsWouldRetain',
+            'trace_import_preflight', 'contentCaptureEnabled',
+            'point-in-time prediction', 'can invalidate', 'not a reservation or backup',
+            'without `--dry-run`', 'trace_identity_conflict',
+            '--thread', '--status', '--requested-model', '--requested-effort', '--requested-tier',
+            'threadId', 'requestedModel', 'requestedReasoningEffort', 'requestedServiceTier',
+            'case-sensitive', 'reported', 'combine with AND',
+            'Cursors are bound to the source and every', 'Pre-v0.7 trace cursors',
+            'source-wide import metadata',
+        ]:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, guide)
+        install = (ROOT / 'docs/AI_INSTALL.md').read_text()
+        for phrase in ['compatibility.readableSchemas', 'traceImportTargetSchema',
+                       'selectedSchema', 'wouldUpgrade', 'backupStatus: "not_verified"',
+                       'Stop every server', 'pre-upgrade backup',
+                       'Never open an upgraded store', 'edit schema numbers']:
+            self.assertIn(phrase, install)
+        smoke = (ROOT / 'scripts/release/smoke.mjs').read_text()
+        for phrase in ['Trace preflight changed database bytes or schema',
+                       'Trace preflight changed database mtime',
+                       'Trace preflight created state or sidecars',
+                       'Trace preflight created a missing database',
+                       'Conflict preflight changed the store',
+                       'Capture-enabled preflight retained content']:
+            self.assertIn(phrase, smoke)
+        skill = (PLUGIN / 'skills/usage-summary/SKILL.md').read_text()
+        block = re.findall(r'```sh\n(.*?)\n```', skill, flags=re.S)[0]
+        self.assertEqual({shlex.split(line)[1] for line in block.splitlines() if line.strip()},
+                         AGGREGATE_COMMANDS)
+        self.assertNotIn('--dry-run', block)
+
     def test_conversational_docs_use_skill_summary_not_raw_skill_records(self):
         paths = [ROOT / 'README.md', ROOT / 'docs/AI_INSTALL.md', ROOT / 'docs/privacy.md',
                  PLUGIN / 'README.md', PLUGIN / 'skills/usage-summary/SKILL.md']

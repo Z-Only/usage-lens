@@ -148,6 +148,71 @@ impl Filters {
         Some((parse(&self.to)? - parse(&self.from)?).num_days())
     }
 }
+pub const TRACE_STATUSES: [&str; 4] = ["completed", "failed", "cancelled", "incomplete"];
+
+/// Exact local trace scope. Empty draft fields are omitted, never trimmed or inferred.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TraceFilters {
+    pub from: String,
+    pub to: String,
+    pub thread_id: String,
+    pub status: String,
+    pub requested_model: String,
+    pub requested_reasoning_effort: String,
+    pub requested_service_tier: String,
+}
+impl TraceFilters {
+    pub fn values(&self) -> [(&'static str, &str); 7] {
+        [
+            ("fromDate", &self.from),
+            ("toDate", &self.to),
+            ("threadId", &self.thread_id),
+            ("status", &self.status),
+            ("requestedModel", &self.requested_model),
+            ("requestedReasoningEffort", &self.requested_reasoning_effort),
+            ("requestedServiceTier", &self.requested_service_tier),
+        ]
+    }
+    pub fn validation_error(&self) -> Option<&'static str> {
+        if !(Filters {
+            from: self.from.clone(),
+            to: self.to.clone(),
+            ..Filters::default()
+        })
+        .valid()
+        {
+            return Some("invalid_trace_date_range");
+        }
+        if (!self.thread_id.is_empty() && !valid_trace_thread(&self.thread_id))
+            || (!self.status.is_empty() && !TRACE_STATUSES.contains(&self.status.as_str()))
+            || [
+                &self.requested_model,
+                &self.requested_reasoning_effort,
+                &self.requested_service_tier,
+            ]
+            .into_iter()
+            .any(|value| {
+                value.encode_utf16().count() > 128
+                    || value.chars().any(|c| c <= '\u{1f}' || c == '\u{7f}')
+            })
+        {
+            return Some("invalid_trace_filter");
+        }
+        None
+    }
+    pub fn matches(&self, response: &Value) -> bool {
+        self.values()
+            .into_iter()
+            .all(|(key, expected)| string(&response[key]) == expected)
+    }
+}
+pub fn valid_trace_thread(value: &str) -> bool {
+    (1..=160).contains(&value.len())
+        && value.as_bytes()[0].is_ascii_alphanumeric()
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._:@/+-".contains(&b))
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct Request {
     pub slot: Slot,
@@ -177,6 +242,7 @@ pub enum Action {
     ApplyTokenPeriod,
     ApplyTraceFilters,
     TraceWeek(String),
+    TraceThread { source: String, thread: String },
     ResetTraceFilters,
     ResetFilters,
     Drilldown(&'static str, String),
@@ -201,8 +267,8 @@ pub struct State {
     pub applied_filters: Filters,
     pub token_period: Filters,
     pub applied_token_period: Filters,
-    pub trace_filters: Filters,
-    pub applied_trace_filters: Filters,
+    pub trace_filters: TraceFilters,
+    pub applied_trace_filters: TraceFilters,
     pub kind: String,
     pub selected: Value,
     pub settings: Value,
@@ -224,8 +290,8 @@ impl Default for State {
             applied_filters: Filters::default(),
             token_period: Filters::default(),
             applied_token_period: Filters::default(),
-            trace_filters: Filters::default(),
-            applied_trace_filters: Filters::default(),
+            trace_filters: TraceFilters::default(),
+            applied_trace_filters: TraceFilters::default(),
             kind: "requested".into(),
             selected: Value::Null,
             settings: json!({"capturePaused":false,"contentCaptureEnabled":false,"retentionDays":30}),
@@ -291,9 +357,10 @@ impl State {
         match (slot, self.error(slot)) {
             (Slot::Activity, "invalid_date_range") => Action::ApplyFilters,
             (Slot::TokenPeriod, "invalid_token_period") => Action::ApplyTokenPeriod,
-            (Slot::Traces | Slot::TraceSummary, "invalid_trace_date_range") => {
-                Action::ApplyTraceFilters
-            }
+            (
+                Slot::Traces | Slot::TraceSummary,
+                "invalid_trace_date_range" | "invalid_trace_filter",
+            ) => Action::ApplyTraceFilters,
             _ => Action::Load(slot, false),
         }
     }
@@ -372,18 +439,19 @@ impl State {
                 } else {
                     "traces/summary"
                 },
-                vec![
-                    ("fromDate", self.applied_trace_filters.from.clone()),
-                    ("toDate", self.applied_trace_filters.to.clone()),
-                    (
+                self.applied_trace_filters
+                    .values()
+                    .into_iter()
+                    .map(|(key, value)| (key, value.to_owned()))
+                    .chain([(
                         "limit",
                         if slot == Slot::Traces {
                             "20".into()
                         } else {
                             String::new()
                         },
-                    ),
-                ],
+                    )])
+                    .collect(),
             ),
             Slot::TraceDetail => (
                 "traces/detail",
@@ -491,10 +559,10 @@ impl State {
                     return vec![];
                 }
                 if matches!(slot, Slot::Traces | Slot::TraceSummary)
-                    && !self.applied_trace_filters.valid()
+                    && let Some(error) = self.applied_trace_filters.validation_error()
                 {
                     self.invalidate(slot);
-                    self.remotes.entry(slot).or_default().error = "invalid_trace_date_range".into();
+                    self.remotes.entry(slot).or_default().error = error.into();
                     return vec![];
                 }
                 if slot == Slot::TokenPeriod && !self.applied_token_period.skill_dates_valid() {
@@ -545,6 +613,11 @@ impl State {
                     "tokenTo" => self.token_period.to = value,
                     "traceFrom" => self.trace_filters.from = value,
                     "traceTo" => self.trace_filters.to = value,
+                    "traceThread" => self.trace_filters.thread_id = value,
+                    "traceStatus" => self.trace_filters.status = value,
+                    "traceModel" => self.trace_filters.requested_model = value,
+                    "traceEffort" => self.trace_filters.requested_reasoning_effort = value,
+                    "traceTier" => self.trace_filters.requested_service_tier = value,
                     _ => {}
                 }
                 if ["from", "to", "skillName"].contains(&field) {
@@ -556,14 +629,30 @@ impl State {
                 let Some(filters) = utc_week(&now) else {
                     return vec![];
                 };
-                self.trace_filters = filters;
+                self.trace_filters.from = filters.from;
+                self.trace_filters.to = filters.to;
+                self.dispatch(Action::ApplyTraceFilters)
+            }
+            Action::TraceThread { source, thread } => {
+                if self.busy()
+                    || source.is_empty()
+                    || source != self.source
+                    || !valid_trace_thread(&thread)
+                {
+                    return vec![];
+                }
+                self.page = Page::Traces;
+                self.trace_filters = self.applied_trace_filters.clone();
+                self.trace_filters.thread_id = thread;
                 self.dispatch(Action::ApplyTraceFilters)
             }
             Action::ResetTraceFilters => {
-                self.trace_filters = Filters::default();
+                self.trace_filters = TraceFilters::default();
                 self.dispatch(Action::ApplyTraceFilters)
             }
             Action::ApplyTraceFilters => {
+                self.selected = Value::Null;
+                self.invalidate(Slot::TraceDetail);
                 self.applied_trace_filters = self.trace_filters.clone();
                 self.invalidate(Slot::Traces);
                 self.invalidate(Slot::TraceSummary);
@@ -753,8 +842,7 @@ impl State {
                 return vec![];
             }
             if matches!(request.slot, Slot::Traces | Slot::TraceSummary)
-                && (string(&value["fromDate"]) != self.applied_trace_filters.from
-                    || string(&value["toDate"]) != self.applied_trace_filters.to)
+                && !self.applied_trace_filters.matches(&value)
             {
                 current.error = "filter_mismatch".into();
                 return vec![];

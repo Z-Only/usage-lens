@@ -20,14 +20,14 @@ Record a short install plan: exact version, repository, asset, installation dire
 
 Canonical repository: [Z-Only/usage-lens](https://github.com/Z-Only/usage-lens)
 
-Open [published releases](https://github.com/Z-Only/usage-lens/releases), read the chosen release notes, and pin the exact stable version. `0.6.0` below is an example, not a claim that the release already exists. If its assets have not been published, stop; never substitute GitHub's automatically generated source archives for an executable release.
+Open [published releases](https://github.com/Z-Only/usage-lens/releases), read the chosen release notes, and pin the exact stable version. `0.7.0` below is an example, not a claim that the release already exists. If its assets have not been published, stop; never substitute GitHub's automatically generated source archives for an executable release.
 
-| Detected system | CPU | Asset for version `0.6.0` |
+| Detected system | CPU | Asset for version `0.7.0` |
 | --- | --- | --- |
-| Linux x64 (static musl) | x86_64 | `usage-lens-0.6.0-linux-x64.tar.gz` |
-| macOS 11.0 deployment target; tested on 15 | arm64 / Apple Silicon | `usage-lens-0.6.0-macos-arm64.tar.gz` |
-| macOS 11.0 deployment target; tested on 15 | x86_64 / Intel | `usage-lens-0.6.0-macos-x64.tar.gz` |
-| Windows x64 | AMD64 | `usage-lens-0.6.0-windows-x64.tar.gz` |
+| Linux x64 (static musl) | x86_64 | `usage-lens-0.7.0-linux-x64.tar.gz` |
+| macOS 11.0 deployment target; tested on 15 | arm64 / Apple Silicon | `usage-lens-0.7.0-macos-arm64.tar.gz` |
+| macOS 11.0 deployment target; tested on 15 | x86_64 / Intel | `usage-lens-0.7.0-macos-x64.tar.gz` |
+| Windows x64 | AMD64 | `usage-lens-0.7.0-windows-x64.tar.gz` |
 
 The matching sidecar replaces `.tar.gz` with `.manifest.json`. Also download `SHA256SUMS` and `release.json` from **the same tag's release**. Assets include a native Rust executable, embedded Leptos UI, bundled SQLite, license, third-party license/notice bundles, documentation, and inert plugin examples. No Node, Bun, Rust, npm, compiler, or package installation is required on the user's computer. The Linux executable is statically linked with musl; it does not require a particular glibc version. Native OS/kernel compatibility still matters.
 
@@ -40,13 +40,13 @@ Windows builds use the static MSVC runtime. GitHub tests them on Windows Server 
 Use the browser or an ordinary HTTPS download tool. Never use `curl | sh`, run an installer fetched from another site, or install packages to make a checksum command work. Example URL pattern:
 
 ```text
-https://github.com/Z-Only/usage-lens/releases/download/v0.6.0/usage-lens-0.6.0-macos-arm64.tar.gz
+https://github.com/Z-Only/usage-lens/releases/download/v0.7.0/usage-lens-0.7.0-macos-arm64.tar.gz
 ```
 
 In a new temporary download directory, the following POSIX example downloads only public release files. Set `platform` from the table, and set `version` to the version the user selected:
 
 ```sh
-version=0.6.0
+version=0.7.0
 platform=macos-arm64
 asset="usage-lens-${version}-${platform}.tar.gz"
 manifest="usage-lens-${version}-${platform}.manifest.json"
@@ -104,7 +104,7 @@ Do not bind to `0.0.0.0`, expose the port, open a firewall rule, or establish a 
 
 Explain the intended absolute database path, what will be retained, and which operation the user is authorizing. Keep data outside the executable directory, cloud-synced folders, and repositories. The default is no content capture. Create an explicit imported source only when requested:
 
-**v0.6.0 trace upgrade warning:** before the first successful
+**v0.7.0 trace upgrade warning:** before the first successful
 `import-trace-bundle` into an existing store, stop all writers and make a verified
 private backup. This explicit import upgrades schema 2/3 to schema 4 atomically;
 v0.5.0 and older cannot read schema 4. Read-only queries accept schemas 2/3/4
@@ -144,13 +144,19 @@ it. Add `--source ID` to check that source; `--max-age-ms N` is permitted only w
 `--source`. `health` requires `--source` and accepts optional `--max-age-ms`. A
 successful health query can still report stale, missing or unsupported observations
 and retained failures; command success does not establish complete collection.
+`doctor` includes `compatibility.readableSchemas: [2,3,4]`,
+`traceImportTargetSchema: 4`, the readable store's `selectedSchema`, and whether a
+successful explicit trace import `wouldUpgrade` it. The latter two fields are
+null when no store was successfully read. `rollbackWarning` and `backupSteps`
+explain safe preparation; `backupStatus: "not_verified"` never means a backup was
+made or checked. No arbitrary files or processes are probed to infer compatibility.
 `doctor` status `ready` means selected setup checks passed, not that collection is
 fresh or historically complete. Check [health semantics](data-contract.md#collection-health)
 before interpreting counts or timestamps. Invalid explicit input or an incompatible
 store remains an error, not permission to repair or collect.
 
 - **Imports:** have the user select a specific compatible absolute file path. Snapshot `import-rollout` is unchanged. The separate `import-rollout-incremental --db ABS --source ID --file ABS --stream ID --source-version PINNED_COMMIT` requires every input each time; it boundedly rereads the complete prefix and defers every unterminated tail. It does not watch, schedule, discover/glob files or reopen a remembered path. Back up before its schema upgrade. Do not scan protected transcript directories or follow file paths found inside a record. See [record import](record-import.md). Do not copy private records into the install directory, support tickets, CI, or this repository
-- **Trace bundles:** have the user choose one stable, closed bounded bundle directory. `import-trace-bundle --db ABS --source ID --directory ABS --source-version a956835d020762cb2b570053af06f643a11c0ecc` is a separate write with a schema-4 upgrade. Only its manifest, trace and validated referenced payloads may be read. No discovery, watcher, upstream trace activation, installation, configuration changes, subprocess or model request is included. Do not import a live-growing bundle; accepted bundle/attempt evidence is immutable. Local trace queries stay outside the Skill/MCP allowlists. See [trace import](trace-import.md)
+- **Trace bundles:** have the user choose one stable, closed bounded bundle directory. First run `import-trace-bundle --dry-run --db ABS --source ID --directory ABS --source-version a956835d020762cb2b570053af06f643a11c0ecc` against the selected existing store for read-only counts, replay/conflict validation, schema and content-capture consequences. No database is created, migrated or backed up. The preview can be invalidated by later changes. After approval and a verified closed-store backup, the same command without `--dry-run` is a separate write with a schema-4 upgrade. Only its manifest, trace and validated referenced payloads may be read. No discovery, watcher, upstream trace activation, installation, configuration changes, subprocess or model request is included. Do not import a live-growing bundle; accepted bundle/attempt evidence is immutable. Local trace queries stay outside the Skill/MCP allowlists. See [trace import](trace-import.md)
 - **Collector:** explain that it launches the user's installed Codex app-server and can initialize configured integrations, access existing authentication, and contact provider services. Get specific approval before running `collect --accept-startup-risk`. Do not log in or access authentication as a side effect of installation; do not copy, print, upload, or retain secrets
 - **Content:** ask separately before enabling content capture, and explain that best-effort redaction is not a guarantee against sensitive data retention
 - **Hooks/background startup:** show the exact configuration and scope first; get approval before changing client settings or enabling persistence. No registration is automatic
@@ -178,7 +184,7 @@ to the chosen Skill directory. Replace `install_root` with the actual extracted
 release directory. This POSIX example refuses to overwrite an existing Skill:
 
 ```sh
-install_root='/ABSOLUTE/usage-lens-0.6.0'
+install_root='/ABSOLUTE/usage-lens-0.7.0'
 skills_root="$HOME/.agents/skills"
 destination="$skills_root/usage-summary"
 if [ -e "$destination" ] || [ -L "$destination" ]; then
@@ -192,7 +198,7 @@ Equivalent Windows PowerShell (no administrator permissions):
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$installRoot = 'C:\ABSOLUTE\usage-lens-0.6.0'
+$installRoot = 'C:\ABSOLUTE\usage-lens-0.7.0'
 $skillsRoot = Join-Path $HOME '.agents\skills'
 $destination = Join-Path $skillsRoot 'usage-summary'
 if (Test-Path -LiteralPath $destination) { throw 'Skill already exists; review an explicit upgrade before replacing it.' }
@@ -250,7 +256,7 @@ is a separate setup diagnostic and is outside the Skill. The local `skills` evid
 command is explicitly outside the conversational allowlist; never use it as a
 fallback or send its individual event/session/turn records to an assistant.
 
-Persisted queries in v0.6.0 open the existing database read-only. They support
+Persisted queries in v0.7.0 open the existing database read-only. They support
 schema 2, 3 or 4 and rollback-journal mode; normal v0.1.0 stores remain compatible
 without migration, as do v0.1.1, v0.2.0 and v0.3.0 schema-2 stores. Querying never
 upgrades a store. Successful explicit incremental import can upgrade schema 2 to
@@ -302,11 +308,14 @@ Finish with the exact installed version/commit, path, demo result, data location
 
 ## Upgrade, rollback, and uninstall
 
-**For v0.6.0, verify a closed-store backup before the first trace import.**
+**For v0.7.0, verify a closed-store backup before the first trace import.**
 Successful explicit trace import upgrades schema 2/3 to 4; v0.5.0 and older cannot
 read it. Failed validation does not migrate. Query-only use does not migrate older
 stores. A rollback needs a separate compatible copy of the pre-upgrade backup;
-replacing the binary does not reverse the migration. Raw trace files are separate
+replacing the binary does not reverse the migration. Never open an upgraded store
+with an incompatible older binary or edit schema numbers to bypass the check.
+`doctor` and `import-trace-bundle --dry-run` are read-only preparation, not backups
+or proof that the later write will succeed. Raw trace files are separate
 from the database and are not erased or sanitized by its deletion/retention.
 
 **For v0.4.0, make and verify the backup before authorizing the first incremental

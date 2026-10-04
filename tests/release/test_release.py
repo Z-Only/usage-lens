@@ -167,6 +167,13 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(bundled[guide], guide_bytes)
                 self.assertEqual(manifest["files"][guide], hashlib.sha256(guide_bytes).hexdigest())
                 self.assertFalse(any("private-trace" in name or name.endswith("trace.jsonl") for name in bundled))
+                for phrase in [b"import-trace-bundle --dry-run", b"trace_import_preflight",
+                               b"--requested-effort", b"requestedServiceTier",
+                               b"point-in-time prediction", b"schema numbers"]:
+                    self.assertIn(phrase, bundled[guide], "Installed trace guide must include current preview/filter/safety instructions")
+                for phrase in [b"compatibility.readableSchemas", b"backupStatus: \"not_verified\"",
+                               b"Stop every server", b"pre-upgrade backup"]:
+                    self.assertIn(phrase, bundled["docs/AI_INSTALL.md"], "Installed setup guide must include actionable doctor/backup guidance")
                 resolved_from = set()
                 for name in referring_docs:
                     for destination in re.findall(r"\[[^\]]*\]\(([^)]+)\)", bundled[name].decode("utf-8")):
@@ -183,6 +190,26 @@ class ReleaseTests(unittest.TestCase):
         (self.root / "docs/trace-import.md").unlink()
         with self.assertRaisesRegex(ValueError, "Missing or linked allowlisted input: docs/trace-import.md"):
             self.build()
+
+    def test_every_bundled_markdown_file_link_resolves_on_every_platform(self):
+        checkout = SCRIPTS.parents[1]
+        markdown = {name for name in FILES if name.endswith(".md")}
+        for name in markdown:
+            (self.root / name).write_bytes((checkout / name).read_bytes())
+        for target in TARGETS:
+            with self.subTest(target=target):
+                archive, manifest = self.build(target)
+                verify_archive(archive, manifest)
+                prefix = asset_base(VERSION, target) + "/"
+                with tarfile.open(archive, "r:gz") as tar:
+                    bundled = {member.name.removeprefix(prefix): tar.extractfile(member).read() for member in tar}
+                for name in markdown:
+                    for destination in re.findall(r"\[[^\]]*\]\(([^)]+)\)", bundled[name].decode("utf-8")):
+                        url = urlsplit(destination)
+                        if url.scheme or url.netloc or not url.path:
+                            continue
+                        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), unquote(url.path)))
+                        self.assertIn(resolved, bundled, f"Broken bundled reference in {name}: {destination}")
 
     def test_windows_binary_filename(self):
         archive, manifest = self.build("windows-x64")

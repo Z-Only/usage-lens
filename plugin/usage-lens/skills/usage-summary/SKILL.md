@@ -19,7 +19,7 @@ its result, confirmed by the user or their existing configuration. If the intend
 source is ambiguous, ask. Never merge sources, substitute another store, or present
 a demo source as the user's account. A missing/unreadable store or failed query is
 an error; do not create a source, initialize a store, or refresh collection to fix it.
-Persisted queries in v0.6.0 accept an existing schema-2, schema-3 or schema-4 rollback-journal
+Persisted queries in v0.7.0 accept an existing schema-2, schema-3 or schema-4 rollback-journal
 database; older schema-2 stores remain compatible without migration. `unsupported_schema` means the schema is not
 supported; `storage_error` can mean a missing/unreadable/invalid store or unsupported
 WAL mode. Report the error without guessing its cause. Never run migrations,

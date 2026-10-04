@@ -1,7 +1,17 @@
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use usage_lens::{adapters::demo::seed_demo, cli::run_main, core::UsageStore, doctor::*};
+use usage_lens::{
+    adapters::{
+        demo::seed_demo, incremental::import_incremental_rollout, rollout::ROLLOUT_SOURCE_VERSION,
+    },
+    cli::run_main,
+    core::{
+        UsageStore,
+        trace::{TRACE_ADAPTER_VERSION, TRACE_SOURCE_VERSION},
+    },
+    doctor::*,
+};
 
 fn assets() -> BTreeMap<String, Vec<u8>> {
     let mut assets: BTreeMap<String, Vec<u8>> = BTreeMap::from([
@@ -97,6 +107,8 @@ fn diagnostic_checks_never_repair_or_create_and_hide_paths_and_content() {
     assert_eq!(db_only["database"]["schemaVersion"], 2);
     assert_eq!(db_only["database"]["accessMode"], "read_only");
     assert_eq!(db_only["database"]["sourceCount"], "1");
+    assert_eq!(db_only["compatibility"]["selectedSchema"], 2);
+    assert_eq!(db_only["compatibility"]["wouldUpgrade"], true);
     let valid = report(Some(&path), Some("demo"), Some(0));
     assert_eq!(valid["status"], "ready");
     assert_eq!(valid["sourceHealth"]["source"]["id"], "demo");
@@ -132,7 +144,107 @@ fn diagnostic_checks_never_repair_or_create_and_hide_paths_and_content() {
         report(Some(&path), None, None)["checks"][2]["code"],
         "unsupported_schema"
     );
+    let unsupported = report(Some(&path), None, None);
+    assert!(unsupported["compatibility"]["selectedSchema"].is_null());
+    assert!(unsupported["compatibility"]["wouldUpgrade"].is_null());
+    assert!(
+        unsupported["checks"][2]["nextStep"]
+            .as_str()
+            .unwrap()
+            .contains("Do not edit schema numbers")
+    );
     assert_eq!(std::fs::read(path).unwrap(), before);
+}
+
+#[test]
+fn compatibility_guidance_tracks_real_schema_upgrades_without_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("synthetic.sqlite");
+    let now = "2026-10-03T00:00:00.000Z";
+    let store = UsageStore::open(&path).unwrap();
+    store.create_source(&json!({"id":"synthetic","displayName":"Synthetic","mode":"imported","provider":"synthetic","coverageDescription":"Synthetic fixtures only"})).unwrap();
+    drop(store);
+    for schema in [2, 3, 4] {
+        if schema > 2 {
+            let store = UsageStore::open(&path).unwrap();
+            if schema == 3 {
+                import_incremental_rollout(&store, b"", &json!({"sourceId":"synthetic","streamId":"empty","observedAt":now,"sourceVersion":ROLLOUT_SOURCE_VERSION})).unwrap();
+            } else {
+                store.import_trace_bundle(&json!({"sourceId":"synthetic","fingerprint":"a".repeat(64),"adapterVersion":TRACE_ADAPTER_VERSION,"sourceVersion":TRACE_SOURCE_VERSION,"importedAt":now,"bundleId":"synthetic-bundle","attempts":[],"warningCodes":[]})).unwrap();
+            }
+        }
+        let before = std::fs::read(&path).unwrap();
+        let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+        let report = report_with_dashboard(Some(&path), Some("synthetic"), None, true);
+        let compatibility = &report["compatibility"];
+        assert_eq!(report["status"], "ready");
+        assert_eq!(compatibility["selectedSchema"], schema);
+        assert_eq!(compatibility["readableSchemas"], json!([2, 3, 4]));
+        assert_eq!(compatibility["requiredJournalMode"], "rollback");
+        assert_eq!(compatibility["traceImportTargetSchema"], 4);
+        assert_eq!(compatibility["wouldUpgrade"], schema < 4);
+        assert_eq!(
+            compatibility["upgradeTrigger"],
+            "successful_explicit_trace_import"
+        );
+        assert_eq!(compatibility["backupStatus"], "not_verified");
+        assert_eq!(compatibility["scope"], "selected_store_schema_only");
+        let warning = compatibility["rollbackWarning"].as_str().unwrap();
+        for text in [
+            "v0.5.0 and older",
+            "v0.3.0 and older",
+            "Replacing the binary",
+            "change schema numbers",
+        ] {
+            assert!(warning.contains(text), "{text}");
+        }
+        let steps = compatibility["backupSteps"].as_array().unwrap();
+        assert_eq!(steps.len(), 4);
+        let instructions = serde_json::to_string(steps).unwrap();
+        for text in [
+            "stop every",
+            "closed store",
+            "Verify the backup",
+            "separate compatible copy",
+            "Do not overwrite",
+        ] {
+            assert!(instructions.contains(text), "{text}");
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().modified().unwrap(),
+            modified
+        );
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
+}
+
+#[test]
+fn unavailable_store_guidance_does_not_guess_schema_or_backup_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing.sqlite");
+    let malformed = dir.path().join("malformed.sqlite");
+    std::fs::write(&malformed, b"synthetic non-database canary").unwrap();
+    for path in [missing.as_path(), malformed.as_path(), dir.path()] {
+        let result = report_with_dashboard(Some(path), None, None, true);
+        assert_eq!(result["checks"][2]["code"], "storage_error");
+        assert!(result["compatibility"]["selectedSchema"].is_null());
+        assert!(result["compatibility"]["wouldUpgrade"].is_null());
+        assert_eq!(result["compatibility"]["backupStatus"], "not_verified");
+        assert!(
+            result["checks"][2]["nextStep"]
+                .as_str()
+                .unwrap()
+                .contains("rollback-journal")
+        );
+        assert!(!result.to_string().contains("synthetic non-database canary"));
+    }
+    assert!(!missing.exists());
+    assert_eq!(
+        std::fs::read(&malformed).unwrap(),
+        b"synthetic non-database canary"
+    );
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
 }
 #[test]
 fn executable_only_diagnostics_and_dashboard_failure_are_explicit() {
@@ -144,6 +256,10 @@ fn executable_only_diagnostics_and_dashboard_failure_are_explicit() {
     assert_eq!(actual["application"]["binaryOs"], std::env::consts::OS);
     assert_eq!(actual["application"]["binaryArch"], std::env::consts::ARCH);
     assert_eq!(actual["scope"], "read_only_setup_diagnostics");
+    assert_eq!(actual["compatibility"]["readableSchemas"], json!([2, 3, 4]));
+    assert!(actual["compatibility"]["wouldUpgrade"].is_null());
+    assert!(actual["compatibility"]["selectedSchema"].is_null());
+    assert_eq!(actual["compatibility"]["backupStatus"], "not_verified");
     let bad = report_with_dashboard(None, None, None, false);
     assert_eq!(bad["status"], "failed");
     assert_eq!(bad["checks"][1]["code"], "embedded_assets_invalid");

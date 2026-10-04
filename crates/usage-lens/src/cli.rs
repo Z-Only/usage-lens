@@ -13,7 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 pub const HELP: &str = concat!(
     "Usage Lens ",
     env!("CARGO_PKG_VERSION"),
-    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: doctor, health, status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, import-rollout-incremental, import-trace-bundle, trace-attempts, trace-detail, trace-summary, collect, hook, serve, mcp\nDoctor: [--db /absolute/existing.sqlite [--source ID [--max-age-ms N]]]\n  Read-only setup checks; no scanning, installation, startup, or collection.\nHealth: --source ID [--max-age-ms N]; source evidence and collection freshness only\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N] [--from YYYY-MM-DD --to YYYY-MM-DD] [--skill EXACT_NAME]\n  Skill trends use UTC occurrence dates, at most 366 inclusive days; missing days are unknown.\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nIncremental rollout: --source ID --file /absolute/file.jsonl --stream ID --source-version PINNED_COMMIT\n  One explicit bounded read; complete lines only, no watching. Back up schema-2 databases before upgrade.\nTrace bundle: --source ID --directory /absolute/bundle --source-version PINNED_COMMIT\n  Explicit immutable Rollout Trace bundle only; prepared requests are not delivery proof.\nTrace reader: trace-attempts --source ID [--from DATE --to DATE] [--limit N --cursor VALUE]\n  trace-detail --source ID --attempt ID (local redacted projection); trace-summary --source ID [--from DATE --to DATE]\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
+    " — local evidence, never complete account history\nusage-lens COMMAND --db /absolute/path/usage.sqlite [options]\nusage-lens serve --demo [--port 4319] [--host 127.0.0.1]\nCommands: doctor, health, status, overview, daily, quota, history, events, skill-summary, skills, tools, response-tokens, detail,\n          source, settings, delete, retention, import, import-rollout, import-rollout-incremental, import-trace-bundle, trace-attempts, trace-detail, trace-summary, collect, hook, serve, mcp\nDoctor: [--db /absolute/existing.sqlite [--source ID [--max-age-ms N]]]\n  Read-only setup checks; no scanning, installation, startup, or collection.\nHealth: --source ID [--max-age-ms N]; source evidence and collection freshness only\nQueries: --source ID; daily also --from YYYY-MM-DD --to YYYY-MM-DD\nSkill summary: aggregate counts only; --source ID [--max-age-ms N] [--from YYYY-MM-DD --to YYYY-MM-DD] [--skill EXACT_NAME]\n  Skill trends use UTC occurrence dates, at most 366 inclusive days; missing days are unknown.\nEvents/skills/tools: optional --from --to --model; events/skills/history --limit --cursor\nDetail: --source ID --event ID (local content only, never use from a plugin)\nSource: --source ID --mode imported|live --name NAME\nSettings: --pause true|false --content true|false --retention-days 1..3650\nDelete: --target all|content --confirm DELETE [--source ID]\nRetention: --confirm APPLY_RETENTION\nImport: --source ID --file /absolute/path/bundle.json (Usage Lens v1 bundle only)\nImport rollout: --source ID --file /absolute/file.jsonl --source-version PINNED_COMMIT\n  Explicit supplied local Codex records only; no scans, ordinary Chat export, or cumulative token summation.\nIncremental rollout: --source ID --file /absolute/file.jsonl --stream ID --source-version PINNED_COMMIT\n  One explicit bounded read; complete lines only, no watching. Back up schema-2 databases before upgrade.\nTrace bundle: --source ID --directory /absolute/bundle --source-version PINNED_COMMIT [--dry-run]\n  --dry-run requires an existing database and predicts acceptance read-only, without creating or migrating.\n  Explicit immutable Rollout Trace bundle only; prepared requests are not delivery proof.\nTrace reader: trace-attempts --source ID [--from DATE --to DATE] [--limit N --cursor VALUE]\n  trace-detail --source ID --attempt ID (local redacted projection); trace-summary --source ID [--from DATE --to DATE]\n  Trace filters: --thread ID --status completed|failed|cancelled|incomplete\n  --requested-model VALUE --requested-effort VALUE --requested-tier VALUE (exact recorded request values)\n  List and summary share filters; cursors are bound to the source and submitted filters.\nCollect: --source ID --accept-startup-risk\n  Starts installed codex app-server; local configuration/plugins/credentials may\n  initialize or refresh, and Codex services may be contacted. No login is created.\nHook: --source ID; one documented JSON hook event from stdin; no stdout on success\nMCP: read-only stdio aggregates, no content, no collection, no automatic tunnel\n--demo uses synthetic data in an isolated in-memory store; never combine with --db\n"
 );
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments {
@@ -53,9 +53,29 @@ pub fn parse_arguments(argv: &[String]) -> Result<Arguments, AdapterError> {
         "skills" => &["source", "from", "to", "kind", "model", "cursor", "limit"],
         "detail" => &["source", "event"],
         "trace-detail" => &["source", "attempt"],
-        "trace-attempts" => &["source", "from", "to", "limit", "cursor"],
-        "trace-summary" => &["source", "from", "to"],
-        "import-trace-bundle" => &["source", "directory", "source-version"],
+        "trace-attempts" => &[
+            "source",
+            "from",
+            "to",
+            "limit",
+            "cursor",
+            "thread",
+            "status",
+            "requested-model",
+            "requested-effort",
+            "requested-tier",
+        ],
+        "trace-summary" => &[
+            "source",
+            "from",
+            "to",
+            "thread",
+            "status",
+            "requested-model",
+            "requested-effort",
+            "requested-tier",
+        ],
+        "import-trace-bundle" => &["source", "directory", "source-version", "dry-run"],
         "source" => &["source", "mode", "name"],
         "settings" => &["pause", "content", "retention-days"],
         "delete" => &["source", "target", "confirm"],
@@ -82,12 +102,21 @@ pub fn parse_arguments(argv: &[String]) -> Result<Arguments, AdapterError> {
         {
             return Err(AdapterError("invalid_argument"));
         }
-        let value = if ["demo", "accept-startup-risk", "help"].contains(&key) {
+        let value = if ["demo", "accept-startup-risk", "help", "dry-run"].contains(&key) {
             "true".to_owned()
         } else {
             let value = argv.get(index).ok_or(AdapterError("missing_argument"))?;
             index += 1;
-            if value.is_empty() || (value.starts_with("--") && key != "skill") || value.len() > 4096
+            if value.is_empty()
+                || (value.starts_with("--")
+                    && ![
+                        "skill",
+                        "requested-model",
+                        "requested-effort",
+                        "requested-tier",
+                    ]
+                    .contains(&key))
+                || value.len() > 4096
             {
                 return Err(AdapterError("missing_argument"));
             }
@@ -303,10 +332,11 @@ async fn execute(
                 | "trace-attempts"
                 | "trace-summary"
                 | "mcp"
-        ) || (command == "settings"
-            && !["pause", "content", "retention-days"]
-                .iter()
-                .any(|key| flags.contains_key(*key)));
+        ) || (command == "import-trace-bundle" && flags.contains_key("dry-run"))
+            || (command == "settings"
+                && !["pause", "content", "retention-days"]
+                    .iter()
+                    .any(|key| flags.contains_key(*key)));
         if read_only {
             UsageStore::open_read_only(filename)?
         } else {
@@ -480,7 +510,11 @@ async fn execute(
                         Path::new(directory),
                         &json!({"sourceId":source,"importedAt":now_iso(),"sourceVersion":version}),
                     )?;
-                    Some(store.import_trace_bundle(&parsed)?)
+                    Some(if flags.contains_key("dry-run") {
+                        store.preflight_trace_bundle(&parsed)?
+                    } else {
+                        store.import_trace_bundle(&parsed)?
+                    })
                 }
                 "collect" => Some(
                     collect_account(&store, source, flags.contains_key("accept-startup-risk"))
@@ -525,6 +559,11 @@ async fn execute(
                         ("event-type", "eventType"),
                         ("kind", "kind"),
                         ("skill", "skillName"),
+                        ("thread", "threadId"),
+                        ("status", "status"),
+                        ("requested-model", "requestedModel"),
+                        ("requested-effort", "requestedReasoningEffort"),
+                        ("requested-tier", "requestedServiceTier"),
                     ] {
                         if let Some(value) = flags.get(flag) {
                             params[key] = json!(value);

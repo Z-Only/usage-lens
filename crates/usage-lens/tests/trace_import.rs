@@ -820,3 +820,118 @@ fn raw_payload_budget_does_not_override_projection_budget_when_content_capture_i
         );
     }
 }
+
+#[tokio::test]
+async fn dry_run_cli_never_creates_or_migrates_and_shares_confined_parser() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let bundle = root.join("synthetic-preview");
+    materialize(&bundle);
+    let db = root.join("synthetic.sqlite");
+    let dbs = db.to_str().unwrap();
+    let bs = bundle.to_str().unwrap();
+    let args = [
+        "import-trace-bundle",
+        "--db",
+        dbs,
+        "--source",
+        "local",
+        "--directory",
+        bs,
+        "--source-version",
+        TRACE_SOURCE_VERSION,
+        "--dry-run",
+    ];
+    assert_eq!(cli(&args).await.0, 1);
+    assert!(!db.exists());
+    assert_eq!(
+        cli(&[
+            "source", "--db", dbs, "--source", "local", "--mode", "imported"
+        ])
+        .await
+        .0,
+        0
+    );
+    let before = std::fs::read(&db).unwrap();
+    let modified = std::fs::metadata(&db).unwrap().modified().unwrap();
+    let manifest = std::fs::read(bundle.join("manifest.json")).unwrap();
+    let payload = std::fs::read(bundle.join("payloads/1.json")).unwrap();
+    let (code, out, err) = cli(&args).await;
+    assert_eq!(code, 0, "{err}");
+    let preview: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(preview["dryRun"], true);
+    assert_eq!(preview["attemptsWouldInsert"], "1");
+    assert_eq!(preview["contentsWouldRetain"], "0");
+    assert_eq!(preview["database"]["schemaVersion"], 2);
+    assert_eq!(preview["database"]["wouldUpgrade"], true);
+    assert!(!out.contains("Visible question"));
+    assert!(!out.contains(bs));
+    assert_eq!(before, std::fs::read(&db).unwrap());
+    assert_eq!(
+        modified,
+        std::fs::metadata(&db).unwrap().modified().unwrap()
+    );
+    assert_eq!(
+        manifest,
+        std::fs::read(bundle.join("manifest.json")).unwrap()
+    );
+    assert_eq!(
+        payload,
+        std::fs::read(bundle.join("payloads/1.json")).unwrap()
+    );
+    assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+    assert_eq!(
+        UsageStore::open_read_only(&db)
+            .unwrap()
+            .get_status()
+            .unwrap()["schemaVersion"],
+        2
+    );
+    std::fs::write(bundle.join("manifest.json"), b"invalid").unwrap();
+    let (code, out, err) = cli(&args).await;
+    assert_eq!(code, 1);
+    assert!(out.is_empty());
+    assert!(err.contains("trace_invalid_json"));
+    assert_eq!(before, std::fs::read(&db).unwrap());
+    std::fs::write(bundle.join("manifest.json"), manifest).unwrap();
+    assert_eq!(cli(&args[..args.len() - 1]).await.0, 0);
+    let after = std::fs::read(&db).unwrap();
+    let replay: Value = serde_json::from_str(&cli(&args).await.1).unwrap();
+    assert_eq!(replay["importAlreadyPresent"], true);
+    assert_eq!(replay["attemptsWouldInsert"], "0");
+    assert_eq!(after, std::fs::read(&db).unwrap());
+    let connection = rusqlite::Connection::open(&db).unwrap();
+    connection.execute_batch("PRAGMA user_version=999").unwrap();
+    drop(connection);
+    let incompatible = std::fs::read(&db).unwrap();
+    assert_eq!(cli(&args).await.0, 1);
+    assert_eq!(incompatible, std::fs::read(&db).unwrap());
+    let connection = rusqlite::Connection::open(&db).unwrap();
+    connection
+        .execute_batch("PRAGMA user_version=4; PRAGMA journal_mode=WAL")
+        .unwrap();
+    drop(connection);
+    let wal_before = std::fs::read(&db).unwrap();
+    let entries_before = std::fs::read_dir(&root)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(cli(&args).await.0, 1);
+    assert_eq!(wal_before, std::fs::read(&db).unwrap());
+    assert_eq!(
+        entries_before,
+        std::fs::read_dir(&root)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect()
+    );
+    let parsed = parse_arguments(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap();
+    assert_eq!(parsed.flags["dry-run"], "true");
+    for args in [
+        vec!["trace-summary", "--dry-run"],
+        vec!["import-trace-bundle", "--dry-run", "--dry-run"],
+        vec!["import-trace-bundle", "--dry-run", "true"],
+    ] {
+        assert!(parse_arguments(&args.into_iter().map(str::to_owned).collect::<Vec<_>>()).is_err());
+    }
+}

@@ -6,6 +6,27 @@ Releases group useful features and fixes. Merging a PR does not automatically cr
 
 Further changes will be grouped here until a meaningful release is ready.
 
+## [0.7.0] - 2026-10-04
+
+Trace-workflow refinement release preparation. This entry does not publish a
+release; exact-commit gates and extracted-artifact verification remain required.
+
+### Added
+
+- Read-only `import-trace-bundle --dry-run` against an explicitly selected existing store, sharing bounded confinement, parsing, projection validation and immutable replay checks with the real import
+- Safe preview counts for attempts, replay and content retention, current/schema-4 migration consequences, warnings and next steps without creating or changing the store or bundle; later changes can invalidate the prediction
+- Exact thread, status, requested-model, requested-effort and requested-tier filters shared by local trace CLI, HTTP lists/summaries and the bilingual Traces view, with source-and-filter-bound cursors
+- Actionable `doctor.compatibility` schema-2/3/4 support, conditional trace upgrade consequences, safe failure guidance and explicit closed-store backup/rollback steps; unknown state stays unknown and backups are never claimed to have been made or verified
+- Complete installed-document link coverage through explicit allowlisting of the linked sample-validation, build/coverage and design guides, with all-platform archive link-closure tests
+
+### Compatibility and safety
+
+- No new database schema: successful explicit trace writes still upgrade schema 2/3 to 4; queries, previews and diagnostics never migrate. **Stop all writers and verify a private closed-store backup before the write.** v0.5.0 and older cannot read schema 4; never edit schema numbers or open upgraded data with an incompatible older binary
+- Existing trace cursors must be restarted after this upgrade; new cursors bind the source, paired UTC dates and every submitted exact filter. Requested metadata filters match reported request values only, without inferring response settings, defaults or Fast/Standard
+- No discovery, watcher, client configuration, model request or live desktop verification. Tests and packaged smoke use synthetic data only; raw source files remain untouched and supported visible content stays local and opt-in
+- Skill + local CLI remains the default with exactly eight allowed aggregate commands, and optional MCP remains exactly eight aggregate tools. Doctor, import previews and local trace queries stay outside these allowlists
+- See [trace import and preflight](docs/trace-import.md), [backup guidance](docs/AI_INSTALL.md#upgrade-rollback-and-uninstall) and [verification scope](docs/verification.md)
+
 ## [0.6.0] - 2026-10-03
 
 Selected-local-trace-bundle release preparation. This entry does not publish a

@@ -334,3 +334,84 @@ contracts; the earlier debug-smoke checkpoint alone does not verify later edits.
 The Traces UI browser scenarios were authored and typechecked, but local browser
 execution remains blocked by the recorded socket restriction. No new browser pass
 or cross-platform runtime pass is claimed from documentation checks.
+
+
+## v0.7.0 trace workflow verification scope (2026-10-04)
+
+This batch targets read-only preflight, exact local trace filters and doctor
+schema/backup guidance. All inputs remain synthetic; no user computer, private
+history, credentials, live account, trace activation or model request is involved.
+The [trace guide](trace-import.md) documents the exact contracts and caveats.
+
+Required tests cover unchanged database bytes, mtime and directory inventory for
+preflight on schema 2/3/4; missing/unsupported/unreadable stores; shared bounded
+parser/path/projection rejection; pause/source errors; fresh/replay/conflict
+counts; capture settings, deletion tombstones and no-backfill behavior; and
+revalidation by the later write. A successful preview does not reserve evidence
+or validate a backup. Doctor tests must preserve safe errors, unknown schemas,
+read-only bytes/mtime/no-sidecar behavior and explicit unverified backup status.
+
+Trace filters need exact case-sensitive thread/status/requested metadata matching,
+valid boundaries, absent/null/invalid state distinctions, AND combinations, paired
+dates, empty sets, summary/list agreement and source-plus-all-filter cursor binding.
+UI coverage must include submitted/unsubmitted inputs, pagination, source changes,
+filter resets, request races, detail dismissal, error/loading states and bilingual
+mobile/desktop rendering. Old evidence must not look current after a scope change.
+
+Release-package tests must show the updated existing allowlisted guides are shipped
+with resolving relative links on every platform, without any selected bundle or
+private data. Extracted executable smoke must check the preview, filtered local
+queries and schema guidance while preserving exactly eight aggregate MCP tools.
+No new conversational command or tool is allowed.
+
+These are verification requirements, not claims that the current tree or future
+release artifacts passed. Results from earlier releases are historical only. The
+complete production coverage gate, exact-commit browser/native cross-platform CI
+and all extracted release artifacts still need their own recorded evidence before
+publication. Live desktop/runtime compatibility remains separately authorized and
+unverified by synthetic tests.
+
+
+Focused v0.7.0 working-tree checks passed by 2026-10-04 13:30 UTC: all 6 doctor
+integration tests; 72 Python script/gate/plugin tests; 43 synthetic release-tool
+fixture tests; the static owned-version/safety guard; JavaScript smoke syntax; and
+the updated native smoke against the local **debug executable**. Smoke exercised
+schema-2/3/4 preflight/read-only behavior, no-create/no-sidecar invariants,
+replay/conflict and content prediction, exact filters and cursor scope, doctor
+backup guidance, existing embedded HTTP/UI checks and eight-tool MCP discovery.
+The release-tool tests package synthetic fixtures across platform labels and
+verify every relative Markdown file link in each archive; they do not execute
+those platforms. The explicit allowlist now also includes the linked sample,
+build/coverage and design guides, without including source or QA assets. This checkpoint is not an extracted release artifact,
+new rendered-UI/browser pass, production coverage gate, cross-platform runtime
+pass, publication or live desktop validation. Rerun applicable checks after later
+edits and record the final exact-commit gate independently.
+
+### v0.7.0 final local production checkpoint (2026-10-04)
+
+The local aggregate source gate passed against published base
+`df70aa96a5cda35244365bd978582095887b65b1`: 363 native Rust/SSR tests,
+72 Python gate/build/plugin tests, formatting, static/version checks, native and
+WebAssembly Clippy with warnings denied, a fresh Leptos bundle and native build.
+Total production coverage was **9331/9742 = 95.7812%**; changed executable coverage
+was **543/559 = 97.1377%**. Every runtime source is accounted for; the 238 authored
+browser bridge/bootstrap/event-handler lines remain conservatively unmeasured
+and uncovered. No coverage suppression or missing-file exception was added.
+
+Independent review found and corrected a valid-filter HTTP boundary: maximum
+percent-encoded trace scopes with pagination exceeded the old 4096-byte URI
+budget. Only the two trace list/summary routes now have an 8192-byte budget;
+synthetic tests cover maximal exact values, real continuation cursors, oversized
+rejection and the unchanged budget on other routes. Review and focused reruns
+also covered read-only preview bytes/mtime/sidecars, WAL refusal, conflicts after
+preview, replay/deletion protection and UI stale-response/source isolation.
+
+Separately, all 43 synthetic release-tool tests, the official-SDK MCP check,
+E2E TypeScript checking and the updated smoke against the fresh **debug executable**
+passed. The package fixtures check relative Markdown link closure on all four
+archive labels. Those fixtures are not native cross-platform executables or
+extracted release artifacts. The browser suite discovers 48 tests across
+1440/390/320px, including 21 trace cases and English/light plus Chinese/dark
+screenshots. The local browser socket restriction was not bypassed; no new
+rendered browser pass is claimed. Exact-commit CI, screenshot inspection and all
+extracted native release packages remain required before publication.

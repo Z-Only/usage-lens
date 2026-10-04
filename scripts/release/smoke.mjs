@@ -56,6 +56,13 @@ try {
   assert.equal(setup.scope, 'read_only_setup_diagnostics');
   assert.equal(setup.database, null);
   assert.equal(setup.sourceHealth, null);
+  assert.deepEqual(setup.compatibility.readableSchemas, [2, 3, 4]);
+  assert.equal(setup.compatibility.selectedSchema, null);
+  assert.equal(setup.compatibility.wouldUpgrade, null);
+  assert.equal(setup.compatibility.backupStatus, 'not_verified');
+  assert.equal(setup.compatibility.traceImportTargetSchema, 4);
+  assert.match(setup.compatibility.rollbackWarning, /v0\.5\.0 and older cannot read schema 4/);
+  assert.equal(setup.compatibility.backupSteps.length, 4);
   assert(setup.checks.some(check => check.id === 'dashboard' && check.status === 'pass'));
   assert.deepEqual(await readdir(home), [], 'Setup-only doctor must not create local state');
   const absent = JSON.parse(run(['doctor', '--db', join(home, 'not-created.sqlite')], 1));
@@ -75,6 +82,9 @@ try {
   assert.equal(ready.database.schemaVersion, 2);
   assert.equal(ready.database.accessMode, 'read_only');
   assert.equal(ready.database.journalMode, 'rollback');
+  assert.equal(ready.compatibility.selectedSchema, 2);
+  assert.equal(ready.compatibility.wouldUpgrade, true);
+  assert.equal(ready.compatibility.backupStatus, 'not_verified');
   const health = JSON.parse(run(['health', '--db', db, '--source', 'release-smoke']));
   assert.equal(health.schemaVersion, 1);
   assert.equal(health.source.id, 'release-smoke');
@@ -132,6 +142,8 @@ try {
   const upgraded = JSON.parse(run(['doctor', '--db', db, '--source', 'release-smoke']));
   assert.equal(upgraded.database.schemaVersion, 3);
   assert.equal(upgraded.database.accessMode, 'read_only');
+  assert.equal(upgraded.compatibility.selectedSchema, 3);
+  assert.equal(upgraded.compatibility.wouldUpgrade, true);
   const importedHealth = JSON.parse(run(['health', '--db', db, '--source', 'release-smoke']));
   assert.equal(importedHealth.stored.events.count, '1');
   run(['status', '--db', db]);
@@ -156,7 +168,7 @@ try {
   const visibleMessage = (role, text, extra = {}) => ({ type: 'message', role, content: [{ type: role === 'assistant' ? 'output_text' : 'input_text', text }], ...extra });
   const secretCanary = 'sk-proj-SyntheticOnlyNeverARealCredential123456';
   const traceRequest = {
-    model: 'synthetic-model', reasoning: null,
+    model: 'synthetic-model', reasoning: { effort: 'synthetic-effort' }, service_tier: 'synthetic-tier',
     instructions: 'EXCLUDED_SYSTEM_INSTRUCTIONS_CANARY',
     input: [
       visibleMessage('user', `Synthetic trace visible user ${secretCanary}`, { internal_chat_message_metadata_passthrough: { content_item_kinds: ['user.text'] } }),
@@ -184,16 +196,59 @@ try {
   await writeFile(join(traceDirectory, 'payloads/3.json'), JSON.stringify({ model: 7, reasoning: [], service_tier: null, input: [] }));
   const traceImportArgs = ['import-trace-bundle', '--db', db, '--source', 'release-smoke', '--directory', traceDirectory, '--source-version', traceVersion];
   const schema3BeforeTrace = await readFile(db);
+  const schema3BeforePreview = { modified: (await stat(db)).mtimeMs, files: await readdir(home) };
+  const tracePreviewText = run([...traceImportArgs, '--dry-run']);
+  const tracePreview = JSON.parse(tracePreviewText);
+  assert.equal(tracePreview.schemaVersion, 1);
+  assert.equal(tracePreview.operation, 'trace_import_preflight');
+  assert.equal(tracePreview.dryRun, true);
+  assert.equal(tracePreview.status, 'ready');
+  assert.equal(tracePreview.attemptsInBundle, '2');
+  assert.equal(tracePreview.attemptsWouldInsert, '2');
+  assert.equal(tracePreview.attemptsAlreadyPresent, '0');
+  assert.equal(tracePreview.contentsWouldRetain, '0');
+  assert.equal(tracePreview.importAlreadyPresent, false);
+  assert.equal(tracePreview.contentCaptureEnabled, false);
+  assert.deepEqual(tracePreview.database, { accessMode: 'read_only', schemaVersion: 3, targetSchemaVersion: 4, wouldUpgrade: true });
+  assert(Array.isArray(tracePreview.warningCodes));
+  assert(Array.isArray(tracePreview.warnings));
+  assert(Array.isArray(tracePreview.nextSteps));
+  for (const privateValue of [traceDirectory, db, 'synthetic-inference', 'Synthetic trace visible user', secretCanary, 'EXCLUDED_SYSTEM_INSTRUCTIONS_CANARY']) {
+    assert(!tracePreviewText.includes(privateValue), 'Preflight leaked private path, identity or content');
+  }
+  assert.deepEqual(await readFile(db), schema3BeforeTrace, 'Trace preflight changed database bytes or schema');
+  assert.equal((await stat(db)).mtimeMs, schema3BeforePreview.modified, 'Trace preflight changed database mtime');
+  assert.deepEqual(await readdir(home), schema3BeforePreview.files, 'Trace preflight created state or sidecars');
+  const missingPreviewArgs = [...traceImportArgs, '--dry-run'];
+  missingPreviewArgs[missingPreviewArgs.indexOf('--db') + 1] = join(home, 'absent-preview.sqlite');
+  assert.equal(run(missingPreviewArgs, 1), '');
+  assert.deepEqual(await readdir(home), schema3BeforePreview.files, 'Trace preflight created a missing database');
+  const schema2Db = join(home, 'synthetic-schema2-preview.sqlite');
+  run(['source', '--db', schema2Db, '--source', 'release-smoke', '--mode', 'imported']);
+  const schema2PreviewArgs = [...traceImportArgs, '--dry-run'];
+  schema2PreviewArgs[schema2PreviewArgs.indexOf('--db') + 1] = schema2Db;
+  const schema2BeforePreview = { bytes: await readFile(schema2Db), modified: (await stat(schema2Db)).mtimeMs, files: await readdir(home) };
+  const schema2Preview = JSON.parse(run(schema2PreviewArgs));
+  assert.equal(schema2Preview.database.schemaVersion, 2);
+  assert.equal(schema2Preview.database.wouldUpgrade, true);
+  assert.equal(schema2Preview.attemptsWouldInsert, '2');
+  assert.deepEqual(await readFile(schema2Db), schema2BeforePreview.bytes, 'Schema-2 preflight changed database bytes or schema');
+  assert.equal((await stat(schema2Db)).mtimeMs, schema2BeforePreview.modified, 'Schema-2 preflight changed database mtime');
+  assert.deepEqual(await readdir(home), schema2BeforePreview.files, 'Schema-2 preflight created sidecars');
   assert.equal(JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke'])).coverage.capture, 'not_captured');
   assert.equal(JSON.parse(run(['trace-summary', '--db', db, '--source', 'release-smoke'])).attemptCount, '0');
   run([...traceImportArgs.slice(0, -1), 'unsupported-version'], 1);
+  run([...traceImportArgs.slice(0, -1), 'unsupported-version', '--dry-run'], 1);
   assert.deepEqual(await readFile(db), schema3BeforeTrace, 'Rejected trace import or trace query migrated schema 3');
   const traced = JSON.parse(run(traceImportArgs));
   assert.equal(traced.attemptsInserted, '2');
   assert.equal(traced.contentsRetained, '0');
   assert.equal(traced.importAlreadyPresent, false);
   const traceReadState = { bytes: await readFile(db), modified: (await stat(db)).mtimeMs, files: await readdir(home) };
-  assert.equal(JSON.parse(run(['doctor', '--db', db, '--source', 'release-smoke'])).database.schemaVersion, 4);
+  const traceDoctor = JSON.parse(run(['doctor', '--db', db, '--source', 'release-smoke']));
+  assert.equal(traceDoctor.database.schemaVersion, 4);
+  assert.equal(traceDoctor.compatibility.selectedSchema, 4);
+  assert.equal(traceDoctor.compatibility.wouldUpgrade, false);
   const tracePage = JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke', '--limit', '1']));
   assert.equal(tracePage.attempts.length, 1);
   assert(tracePage.nextCursor);
@@ -202,8 +257,10 @@ try {
   assert.equal(traceAttempt.status, 'completed');
   assert.equal(traceAttempt.evidence, 'prepared_request');
   assert.equal(traceAttempt.request.model.value, 'synthetic-model');
-  assert.equal(traceAttempt.request.reasoningEffort.state, 'not_reported');
-  assert.equal(traceAttempt.request.serviceTier.state, 'omitted');
+  assert.equal(traceAttempt.request.reasoningEffort.state, 'reported');
+  assert.equal(traceAttempt.request.reasoningEffort.value, 'synthetic-effort');
+  assert.equal(traceAttempt.request.serviceTier.state, 'reported');
+  assert.equal(traceAttempt.request.serviceTier.value, 'synthetic-tier');
   assert.equal(traceAttempt.observed.model.state, 'omitted');
   assert.equal(traceAttempt.observed.serviceTier.state, 'omitted');
   assert.equal(tracePage.attempts[0].request.model.state, 'invalid');
@@ -220,17 +277,51 @@ try {
   assert.equal(traceSummary.coverage.dateBasis, 'attempt_start_utc');
   assert.equal(traceSummary.coverage.completeness, 'partial');
   assert.equal(traceSummary.coverage.accountTotalRelationship, 'not_combined');
+  const exactFilters = ['--thread', 'synthetic-thread', '--status', 'completed', '--requested-model', 'synthetic-model', '--requested-effort', 'synthetic-effort', '--requested-tier', 'synthetic-tier'];
+  const filteredList = JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke', ...exactFilters]));
+  const filteredSummary = JSON.parse(run(['trace-summary', '--db', db, '--source', 'release-smoke', ...exactFilters]));
+  assert.equal(filteredList.attempts.length, 1);
+  assert.equal(filteredList.attempts[0].attemptId, traceAttempt.attemptId);
+  assert.equal(filteredSummary.attemptCount, '1');
+  assert.equal(filteredSummary.totals.totalTokens, '100');
+  for (const result of [filteredList, filteredSummary]) {
+    assert.equal(result.threadId, 'synthetic-thread');
+    assert.equal(result.status, 'completed');
+    assert.equal(result.requestedModel, 'synthetic-model');
+    assert.equal(result.requestedReasoningEffort, 'synthetic-effort');
+    assert.equal(result.requestedServiceTier, 'synthetic-tier');
+  }
+  assert.equal(JSON.parse(run(['trace-summary', '--db', db, '--source', 'release-smoke', '--requested-model', 'SYNTHETIC-MODEL'])).attemptCount, '0');
+  assert.equal(JSON.parse(run(['trace-summary', '--db', db, '--source', 'release-smoke', '--status', 'failed', '--requested-tier', 'synthetic-tier'])).attemptCount, '0');
+  for (const args of [['--thread', ''], ['--status', 'unknown'], ['--requested-effort', ''], ['--requested-tier', '']]) {
+    run(['trace-summary', '--db', db, '--source', 'release-smoke', ...args], 1);
+  }
+  const filteredPage = JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke', '--thread', 'synthetic-thread', '--limit', '1']));
+  assert(filteredPage.nextCursor);
+  assert.equal(JSON.parse(run(['trace-attempts', '--db', db, '--source', 'release-smoke', '--thread', 'synthetic-thread', '--cursor', filteredPage.nextCursor])).attempts.length, 1);
+  run(['trace-attempts', '--db', db, '--source', 'release-smoke', '--cursor', filteredPage.nextCursor], 1);
+  for (const args of [['--thread', 'other-thread'], ['--status', 'completed'], ['--requested-model', 'synthetic-model'], ['--requested-effort', 'synthetic-effort'], ['--requested-tier', 'synthetic-tier']]) {
+    run(['trace-attempts', '--db', db, '--source', 'release-smoke', '--cursor', tracePage.nextCursor, ...args], 1);
+  }
   run(['trace-summary', '--db', db, '--source', 'release-smoke', '--from', '2026-10-03'], 1);
   run(['status', '--db', db]);
   run(['health', '--db', db, '--source', 'release-smoke']);
   assert.deepEqual(await readFile(db), traceReadState.bytes, 'Schema-4 queries changed database bytes');
   assert.equal((await stat(db)).mtimeMs, traceReadState.modified, 'Schema-4 queries changed database mtime');
   assert.deepEqual(await readdir(home), traceReadState.files, 'Schema-4 queries created a sidecar');
+  const replayPreview = JSON.parse(run([...traceImportArgs, '--dry-run']));
+  assert.equal(replayPreview.attemptsWouldInsert, '0');
+  assert.equal(replayPreview.attemptsAlreadyPresent, '2');
+  assert.equal(replayPreview.importAlreadyPresent, true);
+  assert.equal(replayPreview.database.wouldUpgrade, false);
+  assert.deepEqual(await readFile(db), traceReadState.bytes, 'Replay preflight changed the store');
   const traceRepeated = JSON.parse(run(traceImportArgs));
   assert.equal(traceRepeated.attemptsInserted, '0');
   assert.equal(traceRepeated.importAlreadyPresent, true);
   assert.deepEqual(await readFile(db), traceReadState.bytes, 'Identical trace replay changed the store');
   await writeFile(join(traceDirectory, 'payloads/1.json'), JSON.stringify({ ...traceRequest, model: 'changed-synthetic-model' }));
+  run([...traceImportArgs, '--dry-run'], 1);
+  assert.deepEqual(await readFile(db), traceReadState.bytes, 'Conflict preflight changed the store');
   run(traceImportArgs, 1);
   assert.deepEqual(await readFile(db), traceReadState.bytes, 'Conflicting trace import partially changed the store');
   await writeFile(join(traceDirectory, 'payloads/1.json'), JSON.stringify(traceRequest));
@@ -241,6 +332,11 @@ try {
   run(['source', '--db', db, '--source', 'trace-visible', '--mode', 'imported', '--name', 'Synthetic visible trace']);
   const visibleImportArgs = [...traceImportArgs];
   visibleImportArgs[visibleImportArgs.indexOf('--source') + 1] = 'trace-visible';
+  const beforeVisiblePreview = await readFile(db);
+  const visiblePreview = JSON.parse(run([...visibleImportArgs, '--dry-run']));
+  assert.equal(visiblePreview.contentCaptureEnabled, true);
+  assert.equal(visiblePreview.contentsWouldRetain, '2');
+  assert.deepEqual(await readFile(db), beforeVisiblePreview, 'Capture-enabled preflight retained content');
   assert.equal(JSON.parse(run(visibleImportArgs)).contentsRetained, '2');
   const visibleDetailArgs = [...traceDetailArgs];
   visibleDetailArgs[visibleDetailArgs.indexOf('--source') + 1] = 'trace-visible';
@@ -378,7 +474,7 @@ try {
   assert.equal((await request('tools/call', {name:'usage_skills', arguments:{sourceId:'demo',fromDate:'2024-01-01',toDate:'2025-01-01'}})).isError, true);
   lines.close();
   await stop(mcp);
-  console.log('Extracted native artifact passed SQLite persistence, schema-2/3/4 read-only queries, incremental append/no-op/truncation, selected trace import/replay/conflict/privacy, doctor/health/skill trends, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
+  console.log('Native executable passed SQLite persistence, schema-2/3/4 read-only queries, incremental append/no-op/truncation, trace preflight/import/replay/conflict/privacy, exact trace filters and cursor scope, doctor schema/backup guidance, health/skill trends, CLI, embedded demo HTTP/UI, and eight-tool aggregate-only stdio MCP smoke');
 } finally {
   clearTimeout(limit);
   await Promise.all([...children].map(stop));
