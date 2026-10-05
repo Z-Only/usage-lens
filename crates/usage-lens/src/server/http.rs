@@ -278,6 +278,7 @@ async fn dispatch(state: AppState, request: Request) -> Result<Response, HttpErr
                         "requestedServiceTier",
                         "cursor",
                         "limit",
+                        "order",
                     ][..],
                     &["sourceId"][..],
                 ),

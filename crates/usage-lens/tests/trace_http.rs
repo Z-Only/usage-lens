@@ -12,7 +12,12 @@ use usage_lens::{
 };
 
 fn store(import: bool) -> UsageStore {
-    let store = UsageStore::with_clock_ms(":memory:", 1791028800000).unwrap();
+    populate(
+        UsageStore::with_clock_ms(":memory:", 1791028800000).unwrap(),
+        import,
+    )
+}
+fn populate(store: UsageStore, import: bool) -> UsageStore {
     store.create_source(&json!({"id":"synthetic","displayName":"Synthetic trace HTTP","mode":"imported","provider":"synthetic","coverageDescription":"Synthetic only"})).unwrap();
     if import {
         store
@@ -105,13 +110,14 @@ async fn local_trace_routes_keep_projection_content_in_detail_and_summary_aggreg
         "attemptId",
         "turnId",
         "responseId",
-        "trace-thread",
         "response-one",
         "synthetic-http-bundle",
     ] {
         assert!(!summary.to_string().contains(hidden), "leaked {hidden}");
     }
     assert!(summary["threadId"].is_null());
+    // Thread identifiers are intentional in the separate local-only summary.
+    assert_eq!(summary["byThread"][0]["threadId"], "trace-thread");
     let (status, detail, _) = get(
         app.clone(),
         "/api/traces/detail?sourceId=synthetic&attemptId=one",
@@ -390,4 +396,201 @@ async fn maximum_encoded_trace_scope_and_cursor_fit_a_trace_only_bounded_uri_bud
         assert_eq!(status, 400);
         assert_eq!(error["error"]["code"], "invalid_path", "{route}");
     }
+}
+
+#[tokio::test]
+async fn trace_timeline_order_is_local_explicit_and_cursor_bound() {
+    let app = http::router(store(true), 4319);
+    let scope = "sourceId=synthetic&threadId=trace-thread&order=oldest_first";
+    let (status, first, _) = get(app.clone(), &format!("/api/traces?{scope}&limit=1"), &[]).await;
+    assert_eq!(status, 200);
+    assert_eq!(first["order"], "oldest_first");
+    assert_eq!(first["attempts"][0]["attemptId"], "one");
+    assert_eq!(first["attempts"][0]["timestampAnomaly"], false);
+    let cursor = first["nextCursor"].as_str().unwrap();
+    let (status, next, _) = get(
+        app.clone(),
+        &format!("/api/traces?{scope}&limit=1&cursor={cursor}"),
+        &[],
+    )
+    .await;
+    assert_eq!(status, 200);
+    assert_eq!(next["attempts"][0]["attemptId"], "two");
+    assert!(next["nextCursor"].is_null());
+    for order in ["", "&order=newest_first"] {
+        assert_eq!(
+            get(
+                app.clone(),
+                &format!(
+                    "/api/traces?sourceId=synthetic&threadId=trace-thread{order}&cursor={cursor}"
+                ),
+                &[]
+            )
+            .await
+            .0,
+            400
+        );
+    }
+    for path in [
+        "/api/traces?sourceId=synthetic&order=oldest_first&order=newest_first",
+        "/api/traces?sourceId=synthetic&order=ASC",
+        "/api/traces?sourceId=synthetic&order=oldest_first%20",
+        "/api/traces?sourceId=synthetic&order=",
+        "/api/traces/summary?sourceId=synthetic&order=oldest_first",
+        "/api/traces/detail?sourceId=synthetic&attemptId=one&order=oldest_first",
+        "/api/events?sourceId=synthetic&order=oldest_first",
+    ] {
+        assert_eq!(get(app.clone(), path, &[]).await.0, 400, "{path}");
+    }
+    let (status, summary, _) = get(app.clone(), "/api/traces/summary?sourceId=synthetic&threadId=trace-thread&requestedModel=requested-model", &[]).await;
+    assert_eq!(status, 200);
+    for key in ["byThread", "byRequestedSettings", "byDay"] {
+        assert_eq!(summary[key].as_array().unwrap().len(), 1);
+        assert_eq!(summary[key][0]["count"], "2");
+        assert_eq!(
+            summary[key][0]["totals"]["inputTokens"],
+            "18014398509481986"
+        );
+        assert_eq!(summary[key][0]["timestampAnomalyCount"], "0");
+    }
+    assert_eq!(summary["byThread"][0]["statusCounts"]["completed"], "2");
+    assert_eq!(summary["byThread"][0]["statusCounts"]["failed"], "0");
+    assert_eq!(
+        summary["byRequestedSettings"][0]["request"]["serviceTier"]["value"],
+        "priority"
+    );
+    assert_eq!(summary["byDay"][0]["date"], "2026-10-03");
+    assert!(summary.get("order").is_none());
+    assert_eq!(summary["timestampAnomalyCount"], "0");
+    for key in [
+        "threadsTruncated",
+        "requestedSettingsTruncated",
+        "daysTruncated",
+    ] {
+        assert_eq!(summary[key], false);
+    }
+    assert!(!summary.to_string().contains("SENTINEL"));
+    assert_eq!(
+        get(
+            app.clone(),
+            "/api/traces?sourceId=synthetic&order=oldest_first",
+            &[("origin", "https://untrusted.invalid")]
+        )
+        .await
+        .0,
+        403
+    );
+    assert_eq!(get(app, "/api/status", &[]).await.1["schemaVersion"], 4);
+}
+
+#[tokio::test]
+async fn trace_cli_exposes_order_and_insights_without_writing_or_expanding_other_queries() {
+    use usage_lens::cli::{parse_arguments, run_main};
+    async fn cli(args: &[&str]) -> (i32, Value, String) {
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        let args = args
+            .iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>();
+        let code = run_main(&args, &b""[..], &mut stdout, &mut stderr).await;
+        (
+            code,
+            serde_json::from_slice(&stdout).unwrap_or(Value::Null),
+            String::from_utf8(stderr).unwrap(),
+        )
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("synthetic-insights.sqlite");
+    drop(populate(UsageStore::open(&path).unwrap(), true));
+    let before = std::fs::read(&path).unwrap();
+    let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+    let db = path.to_str().unwrap();
+    let (code, first, error) = cli(&[
+        "trace-attempts",
+        "--db",
+        db,
+        "--source",
+        "synthetic",
+        "--thread",
+        "trace-thread",
+        "--order",
+        "oldest_first",
+        "--limit",
+        "1",
+    ])
+    .await;
+    assert_eq!(code, 0, "{error}");
+    assert_eq!(first["order"], "oldest_first");
+    assert_eq!(first["attempts"][0]["attemptId"], "one");
+    let cursor = first["nextCursor"].as_str().unwrap();
+    let (code, next, error) = cli(&[
+        "trace-attempts",
+        "--db",
+        db,
+        "--source",
+        "synthetic",
+        "--thread",
+        "trace-thread",
+        "--order",
+        "oldest_first",
+        "--cursor",
+        cursor,
+    ])
+    .await;
+    assert_eq!(code, 0, "{error}");
+    assert_eq!(next["attempts"][0]["attemptId"], "two");
+    assert!(next["nextCursor"].is_null());
+    let (code, default, error) =
+        cli(&["trace-attempts", "--db", db, "--source", "synthetic"]).await;
+    assert_eq!(code, 0, "{error}");
+    assert_eq!(default["order"], "newest_first");
+    assert_eq!(default["attempts"][0]["attemptId"], "two");
+    let (code, summary, error) = cli(&[
+        "trace-summary",
+        "--db",
+        db,
+        "--source",
+        "synthetic",
+        "--from",
+        "2026-10-03",
+        "--to",
+        "2026-10-03",
+        "--requested-effort",
+        "high",
+    ])
+    .await;
+    assert_eq!(code, 0, "{error}");
+    assert_eq!(summary["byThread"][0]["count"], "2");
+    assert_eq!(
+        summary["byRequestedSettings"][0]["request"]["reasoningEffort"]["value"],
+        "high"
+    );
+    assert_eq!(summary["byDay"][0]["date"], "2026-10-03");
+    assert!(!summary.to_string().contains("SENTINEL"));
+    for order in ["bad", "OLDEST_FIRST", "newest_first "] {
+        let (code, output, error) = cli(&[
+            "trace-attempts",
+            "--db",
+            db,
+            "--source",
+            "synthetic",
+            "--order",
+            order,
+        ])
+        .await;
+        assert_eq!(code, 1);
+        assert!(output.is_null());
+        assert!(error.contains("invalid_input"));
+    }
+    for command in ["trace-summary", "trace-detail", "events", "overview", "mcp"] {
+        let args = [command, "--order", "oldest_first"].map(str::to_string);
+        assert!(parse_arguments(&args).is_err(), "{command}");
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().modified().unwrap(),
+        modified
+    );
+    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
 }

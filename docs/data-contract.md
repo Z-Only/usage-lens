@@ -76,7 +76,7 @@ the selected setup checks pass. `incomplete` alone exits 0. `ready` means the lo
 setup can be queried; it does not imply recent or complete collection. A passed
 diagnostic does not prove live account or actual client compatibility.
 
-In v0.7, `compatibility` documents `readableSchemas: [2,3,4]`,
+In v0.8, `compatibility` documents `readableSchemas: [2,3,4]`,
 `requiredJournalMode: "rollback"`, `traceImportTargetSchema: 4`, `selectedSchema`
 and `wouldUpgrade`. The latter two fields are null unless the selected store was
 successfully read; otherwise `wouldUpgrade` is true for schema 2/3 and false for 4,
@@ -309,7 +309,7 @@ to compare and cannot be reconstructed; adoption never backfills their content.
 Raw-evidence conflict checks apply from the first accepted incremental digest
 onward, independent of subsequent capture settings.
 
-## Selected RolloutTrace bundles (v0.6–v0.7)
+## Selected RolloutTrace bundles (v0.6–v0.8)
 
 The separate `import-trace-bundle --db ABS --source ID --directory ABS
 --source-version a956835d020762cb2b570053af06f643a11c0ecc` reads one bounded,
@@ -341,9 +341,60 @@ control-free and at most 128 UTF-16 units. Matches are case-sensitive with no
 trimming, aliases or default inference. Requested filters match reported request
 values only. Null/omitted/invalid states and response-side observations do not
 match requested strings. List/summary filter echoes use null for absent fields.
-Cursors bind source and all submitted filters, so changed scope or pre-v0.7
-cursors require a fresh first page. Summary groups and totals share that scope;
+In v0.8, CLI `trace-attempts --order oldest_first|newest_first` and HTTP
+`GET /api/traces?order=...` accept the same two orders, defaulting to
+`newest_first`. List results echo `order`; summaries do not take an order.
+Cursors bind source, all submitted filters and order, so changing scope/order or
+using a v0.7-or-older cursor requires a fresh first page. Page size may vary within
+the same scope. Sorting is deterministic `(startedAt, attemptId)`, both ascending
+for oldest-first and both descending for newest-first. Original event sequence
+is not retained; this clock-based timeline is not causal order or event order.
+The dashboard's **View thread** selects oldest-first and preserves every other
+submitted filter/date bound. Summary groups and totals share that scope;
 source-wide import warnings remain independent of all attempt filters.
+
+The local summary adds `byThread`, `byRequestedSettings` and `byDay`:
+
+- Each `byThread` row has `threadId`, earliest/latest matching `firstStartedAt`
+  and `lastStartedAt`, and `statusCounts` with decimal-string `completed`,
+  `failed`, `cancelled` and `incomplete` counts. It includes only matching retained
+  attempts, not excluded portions of that thread. Its bounds are recorded start
+  clocks, never active time, a full-thread duration or latency
+- Each `byRequestedSettings` row has `request: {model, reasoningEffort,
+  serviceTier}` with full `{state, value}` cells. The joint tuple preserves
+  `reported`, `not_reported` (explicit null), `omitted` and `invalid` states;
+  non-reported cell values stay null. It never substitutes response settings
+- Each `byDay` row has `date` from required, normalized recorded `startedAt` UTC.
+  Completion and import time are never substitutes. Missing dates are absent and
+  unknown, not filled with zero rows
+
+All new rows have `count`, `tokenAttemptCount`, `totals`, `tokenCoverage` and
+`timestampAnomalyCount`; counts and reported token sums are exact decimal strings.
+Top-level totals retain `attemptCount` in place of `count`. All existing/new
+totals, including top-level, status and individual-metadata groups, gain
+`timestampAnomalyCount`. It counts attempts with a known `completedAt` earlier
+than `startedAt`. List/detail attempts expose that same condition as boolean
+`timestampAnomaly`; missing completion is false, not fabricated timing evidence.
+No latency, throughput or speed metric is derived from either field. Per-token
+missingness and null totals where no valid values were reported are unchanged.
+
+Each new array independently retains at most 500 lexicographically smallest
+keys with `threadsTruncated`, `requestedSettingsTruncated` or `daysTruncated`.
+Keys are thread IDs, the model state/value then effort state/value then tier
+state/value tuple, or UTC dates respectively. Every retained group's counts and
+totals are complete for the submitted scope; top-level totals cover the full
+matching retained population independently of all limits. The existing
+`groupsTruncated` still covers only the five individual-metadata dimensions.
+The English/Chinese dashboard exposes thread, joint-setting and daily views and
+keeps these independent truncation notices visible.
+
+The local summary echoes the selected `source` object, including `source.id`,
+which the dashboard checks before accepting its data. All summaries are
+source-local. They never join rows from different sources,
+alter immutable attempt/response ownership or deduplication, or establish unique
+account-wide activity. Imported histories may overlap. `trace-summary` now
+intentionally includes local thread IDs; its name does not make it suitable for
+the conversational Skill/MCP allowlists.
 
 Attempt records are prepared-request evidence; upstream records them before
 transmission, and WebSocket warmup can record logical full input rather than exact
@@ -393,9 +444,10 @@ bundle are conflicts, not incremental updates. Select a closed stable bundle.
 
 Only a successful explicit trace import upgrades schema 2/3 to schema 4. **Make a
 verified closed-store backup first. v0.5.0 and older cannot read schema 4.**
-v0.7.0 read-only queries support rollback-journal schemas 2/3/4 without migration;
-normal opens do not automatically enable trace storage. Exact local synthetic
-checks do not establish desktop runtime compatibility or environment inheritance.
+v0.8.0 read-only queries support rollback-journal schemas 2/3/4 without migration;
+normal opens do not automatically enable trace storage. The v0.8 summary and
+ordering additions introduce no migration, new schema or new write path. Exact
+local synthetic checks do not establish desktop runtime compatibility or environment inheritance.
 Live desktop validation remains pending separate user authorization.
 
 ## v0.5 local reading queries

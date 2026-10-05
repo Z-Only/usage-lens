@@ -29,10 +29,10 @@ function listFor(url: URL, attempts: Attempt[] = [structuredClone(fixtures.attem
   result.attempts = attempts.map(attempt => ({ ...attempt, sourceId: result.source.id }));
   result.fromDate = url.searchParams.get("fromDate");
   result.toDate = url.searchParams.get("toDate");
-  return { ...result, ...filtersFor(url) };
+  return { ...result, ...filtersFor(url), order: url.searchParams.get("order") ?? "newest_first" };
 }
 function summaryFor(url: URL) {
-  return { ...structuredClone(fixtures.summary), ...filtersFor(url) };
+  return { ...structuredClone(fixtures.summary), ...filtersFor(url), source: { id: url.searchParams.get("sourceId") ?? "demo" } };
 }
 async function summaryRoute(page: Page) {
   await page.route(/\/api\/traces\/summary\?/, async route => {

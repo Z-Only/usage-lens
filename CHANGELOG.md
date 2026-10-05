@@ -6,6 +6,30 @@ Releases group useful features and fixes. Merging a PR does not automatically cr
 
 Further changes will be grouped here until a meaningful release is ready.
 
+## [0.8.0] - 2026-10-05
+
+Trace-session-insight release preparation. The local production gate passed;
+release verification still requires fresh exact-commit CI and extracted-artifact
+evidence. This entry does not publish a release or claim live desktop testing.
+
+### Added
+
+- Source-local `byThread` summaries with local thread IDs, earliest/latest matching recorded starts, all four status counts, exact token totals/coverage and timestamp-anomaly counts
+- Joint `byRequestedSettings` groups preserving all request model/effort/tier state/value cells, and `byDay` rows derived only from normalized recorded start times in UTC; missing days remain absent/unknown
+- Independent 500-group limits with lexicographically smallest keys, complete retained groups and explicit thread/settings/day truncation flags; global totals still cover the full matching retained population
+- `trace-attempts --order oldest_first|newest_first` and matching HTTP list order, default newest-first, with deterministic recorded-start/attempt-ID ordering and echoed order
+- Boolean `timestampAnomaly` on attempt list/detail and decimal-string `timestampAnomalyCount` on every existing/new trace total for known completion before start
+- English/Chinese thread, joint requested-setting and daily views; thread navigation preserves submitted filters and selects oldest-first
+
+### Compatibility and safety
+
+- **Restart v0.7 and older trace cursors from the first page.** New cursors bind order as well as source, exact filters and paired dates
+- No new database schema, migration or write path. Schema-4 trace storage, read-only schema-2/3/4 compatibility, immutable attempt/response ownership, deduplication and import replay/deletion rules remain unchanged
+- Thread summaries cover only submitted filters/date bounds; no cross-source joins or account-wide uniqueness claims. Imported histories may overlap
+- Timeline sorting is recorded wall-clock order with an attempt-ID tie-breaker, not retained source-event or causal order. Timestamp bounds/anomalies never establish active time, latency, speed, quota or cost
+- `trace-summary` intentionally includes local thread IDs and remains outside the unchanged eight-command Skill/eight-tool MCP allowlists. Content stays local and opt-in; raw files remain untouched
+- No capture activation, discovery, watcher, client configuration, live collection, credentials or model request. Exact-head verification and live desktop compatibility remain separate; see [verification requirements](docs/verification.md) and [trace contract](docs/trace-import.md)
+
 ## [0.7.0] - 2026-10-04
 
 Trace-workflow refinement release preparation. This entry does not publish a

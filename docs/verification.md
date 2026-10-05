@@ -415,3 +415,86 @@ extracted release artifacts. The browser suite discovers 48 tests across
 screenshots. The local browser socket restriction was not bypassed; no new
 rendered browser pass is claimed. Exact-commit CI, screenshot inspection and all
 extracted native release packages remain required before publication.
+
+## v0.8.0 trace session-insight verification scope (2026-10-05)
+
+The local production gate below has passed. Exact-commit remote CI and extracted
+release-artifact verification remain pending. Prior checkpoints above remain
+historical and do not validate this release. All new
+checks must use synthetic bundles and disposable local stores; no user computer,
+private history, credentials, live collection, trace activation or model request
+is part of this scope.
+
+Required core/CLI/HTTP coverage includes:
+
+- Source-local `byThread`, joint `byRequestedSettings` and recorded-start UTC
+  `byDay` agreement with existing summary/list filter scopes, including exact
+  thread/status/requested metadata, paired date boundaries, empty matches and
+  schema-2/3 stores with no trace rows
+- All four status counts, first/last matching recorded starts, complete full
+  state/value tuples including null/omitted/invalid states, UTC normalization
+  across day boundaries, no import-time fallback and absent unknown days
+- Independent 500-group caps retaining the lexicographically smallest keys;
+  complete retained groups even with interleaved/adversarial insertion order,
+  separate truncation flags and unchanged full-population global totals
+- Exact decimal-string large-token sums and counters, per-token missingness,
+  null totals without reported values, unchanged immutable attempt/response
+  ownership and overlapping-source separation
+- `timestampAnomaly` and every existing/new `timestampAnomalyCount` for backward,
+  equal, forward and missing completion timestamps, without duration inference
+- Oldest/newest deterministic `(startedAt, attemptId)` ordering, timestamp ties,
+  continuation with no duplicates/skips, echoed order, malformed order rejection,
+  source/date/filter/order-bound cursors, page-size changes and explicit rejection
+  of v0.7 cursor strings so callers restart the first page
+- Unchanged read-only database bytes/mtime/no-sidecar behavior and schema support,
+  import/preflight/replay/content boundaries and the eight-tool MCP discovery set
+
+UI verification must cover English/Chinese thread, joint-setting and daily views,
+independent truncation notices, exact large counts and unknown tokens, scoped
+thread bounds/anomalies, and oldest-first thread navigation preserving all other
+submitted filters. Exercise source/filter/order changes, pending draft versus
+submitted inputs, reset/refresh/pagination, stale response cancellation, detail
+closure, errors/retry and 1440/390/320px layouts with fresh screenshots. Recorded
+clock order must never be labeled causal order, active time, latency or speed.
+
+Before publication, record the complete production gate with at least 95% total
+and changed executable-line coverage, exact-commit browser/native cross-platform
+CI and extracted-artifact smoke for every platform. Package link checks must keep
+the updated existing guides available without adding raw bundles or private data.
+Local summary IDs remain outside the Skill/MCP allowlists. No new pass count,
+coverage percentage, Mac activation or live desktop compatibility is claimed here.
+
+
+### v0.8.0 frozen-input local checkpoint (2026-10-05)
+
+The complete local gate passed against base
+`ed3452128105da2e1b511ad14c920c3d4f4765e7`: 380 Rust/SSR tests, 73 Python
+build/gate/plugin tests, static checks, formatting, native and WebAssembly Clippy,
+a fresh Leptos CSR build and native build. Total production line coverage was
+9647/10057 (95.9232%); changed executable lines were 309/309 (100%). All 149
+recorded source/configuration/test/document inputs stayed unchanged during that
+run; only these post-run verification notes and matching release wording were
+updated afterward. The 238 conservative browser/event/bootstrap lines remain
+counted as uncovered; no production file is omitted from the inventory.
+
+Separately, all 43 synthetic release-tool tests, TypeScript checks and the
+official JavaScript MCP SDK parity test passed. The updated full release smoke
+passed against the freshly built **debug executable**, including actual SQLite
+imports and local CLI thread/settings/day summaries, both orders, cursor restart,
+read-only bytes/mtime/sidecars, local HTTP/assets and the unchanged eight-tool MCP
+surface. This is not an extracted native release-artifact pass.
+
+Independent read-only review found no blocking production accuracy issue. It ran
+65 focused backend/import/filter/store/HTTP tests and the 25 final trace UI tests,
+and a disposable probe with 1,200 attempts in each of two sources checked replay
+isolation, eight filter scopes, all three independent group caps/exact totals and
+16 complete paginations. Two browser-fixture issues (anomaly wording and duplicate
+synthetic inference/response identities) were corrected before the frozen gate.
+
+The browser suite discovers 54 cases at 1440/390/320px. A bounded local attempt
+of the two new desktop language cases stopped before rendering because the
+expected Playwright Chromium headless-shell executable was absent. No browser
+pass or fresh rendered screenshot is claimed. Exact-head GitHub browser/native
+cross-platform CI, inspection of its English/Chinese screenshots, and all four
+extracted native release-package checks remain required before publication. No
+real account, Mac activation or live trace compatibility was tested.

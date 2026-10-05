@@ -5,12 +5,14 @@ use std::collections::BTreeMap;
 
 pub const TRACE_ADAPTER_VERSION: &str = "usage-lens-trace/0.1.0";
 pub const TRACE_SOURCE_VERSION: &str = "a956835d020762cb2b570053af06f643a11c0ecc";
-pub const TRACE_WARNINGS: [&str; 5] = [
+pub const TRACE_WARNINGS: [&str; 7] = [
     "Prepared request evidence does not prove that a request was sent, accepted, or billed.",
     "Only explicitly imported local trace attempts are covered; missing attempts and history are unknown.",
     "Requested settings and observed response metadata are separate evidence; defaults and routing are not inferred.",
     "Token totals use directly associated completed responses only and are not combined with rollout or account totals.",
-    "At most 500 groups per metadata field are displayed; totals include every matching attempt.",
+    "At most 500 groups per breakdown are displayed; totals include every matching attempt.",
+    "Timeline order follows recorded UTC start timestamps, with attempt identifiers breaking ties; it is not causal or event order.",
+    "Timestamp anomalies count completions earlier than starts, indicating clock inconsistency; they are not latency measurements.",
 ];
 
 fn digest(value: &Value) -> String {
@@ -162,7 +164,18 @@ fn normalize_attempt(input: &Value) -> CoreResult<Value> {
 }
 #[path = "trace_filters.rs"]
 mod trace_filters;
-use trace_filters::{FILTER_KEYS, FILTER_SQL, TraceFilters};
+use trace_filters::{FILTER_KEYS, FILTER_SQL, TraceFilters, TraceOrder};
+#[path = "trace_insights.rs"]
+mod trace_insights;
+use trace_insights::TraceInsights;
+
+fn timestamp_anomaly(attempt: &Value) -> bool {
+    // Imported timestamps are normalized UTC strings with fixed millisecond precision.
+    attempt["completedAt"]
+        .as_str()
+        .zip(attempt["startedAt"].as_str())
+        .is_some_and(|(completed, started)| completed < started)
+}
 
 fn optional_range(input: &Value) -> CoreResult<(Option<String>, Option<String>)> {
     match (input.get("fromDate"), input.get("toDate")) {
@@ -176,12 +189,14 @@ fn optional_range(input: &Value) -> CoreResult<(Option<String>, Option<String>)>
 struct Totals {
     count: u64,
     token_count: u64,
+    timestamp_anomaly_count: u64,
     sums: [BigUint; 6],
     coverage: [[u64; 4]; 6],
 }
 impl Totals {
     fn add(&mut self, attempt: &Value) {
         self.count += 1;
+        self.timestamp_anomaly_count += u64::from(timestamp_anomaly(attempt));
         let tokens = &attempt["tokens"];
         if !tokens.is_null() {
             self.token_count += 1;
@@ -217,7 +232,7 @@ impl Totals {
             );
             coverage.insert((*key).into(), json!({"reportedCount":counts[0].to_string(),"omittedCount":counts[1].to_string(),"notReportedCount":counts[2].to_string(),"invalidCount":counts[3].to_string()}));
         }
-        json!({"count":self.count.to_string(),"tokenAttemptCount":self.token_count.to_string(),"totals":totals,"tokenCoverage":coverage})
+        json!({"count":self.count.to_string(),"tokenAttemptCount":self.token_count.to_string(),"timestampAnomalyCount":self.timestamp_anomaly_count.to_string(),"totals":totals,"tokenCoverage":coverage})
     }
 }
 struct TraceBundle {
@@ -523,17 +538,18 @@ impl UsageStore {
         })
     }
     pub fn get_trace_attempts(&self, input: &Value) -> CoreResult<Value> {
-        let allowed = ["sourceId", "limit", "cursor", "fromDate", "toDate"]
+        let allowed = ["sourceId", "limit", "cursor", "fromDate", "toDate", "order"]
             .into_iter()
             .chain(FILTER_KEYS)
             .collect::<Vec<_>>();
         exact_keys(input, &allowed)?;
         let limit = limit(input)?;
         let filters = TraceFilters::parse(input)?;
+        let order = TraceOrder::parse(input.get("order"))?;
         self.read(|| {
             let source = self.source(&input["sourceId"])?;
             let id = s(&source["id"]);
-            let cursor = filters.cursor(input.get("cursor"),id)?;
+            let cursor = filters.cursor(input.get("cursor"),id,order)?;
             let mut records = Vec::new();
             let mut next = None;
             if self.has_trace_schema()? {
@@ -541,22 +557,24 @@ impl UsageStore {
                 parameters.push(cursor.as_ref().map(|(at,_)|at.clone()).into());
                 parameters.push(cursor.as_ref().map(|(_,key)|key.clone()).into());
                 parameters.push((limit+1).into());
-                let sql = format!("SELECT a.payload,a.started_at,a.attempt_id,d.attempt_id IS NOT NULL FROM trace_attempts a LEFT JOIN trace_details d ON d.source_id=a.source_id AND d.attempt_id=a.attempt_id WHERE {FILTER_SQL} AND (?9 IS NULL OR a.started_at<?9 OR (a.started_at=?9 AND a.attempt_id<?10)) ORDER BY a.started_at DESC,a.attempt_id DESC LIMIT ?11");
+                let (comparison, direction) = order.sql();
+                let sql = format!("SELECT a.payload,a.started_at,a.attempt_id,d.attempt_id IS NOT NULL FROM trace_attempts a LEFT JOIN trace_details d ON d.source_id=a.source_id AND d.attempt_id=a.attempt_id WHERE {FILTER_SQL} AND (?9 IS NULL OR a.started_at{comparison}?9 OR (a.started_at=?9 AND a.attempt_id{comparison}?10)) ORDER BY a.started_at {direction},a.attempt_id {direction} LIMIT ?11");
                 let mut statement = safe(self.db()?.prepare(&sql))?;
                 let mut rows = safe(statement.query(rusqlite::params_from_iter(parameters)))?;
                 let mut last: Option<(String, String)> = None;
                 while let Some(row) = safe(rows.next())? {
                     if records.len() == limit as usize {
-                        if let Some((at,key)) = last { next = Some(filters.encode_cursor(id,&at,&key)); }
+                        if let Some((at,key)) = last { next = Some(filters.encode_cursor(id,&at,&key,order)); }
                         break;
                     }
                     let mut value = parse(safe(row.get(0))?)?;
                     value["contentRetained"] = json!(safe(row.get::<_,bool>(3))?);
+                    value["timestampAnomaly"] = json!(timestamp_anomaly(&value));
                     records.push(value);
                     last = Some((safe(row.get::<_,String>(1))?,safe(row.get::<_,String>(2))?));
                 }
             }
-            let mut result = json!({"source":source,"attempts":records,"nextCursor":next,"coverage":self.trace_coverage(id)?,"warnings":TRACE_WARNINGS});
+            let mut result = json!({"source":source,"attempts":records,"order":order.name(),"nextCursor":next,"coverage":self.trace_coverage(id)?,"warnings":TRACE_WARNINGS});
             filters.echo(&mut result);
             self.with_trace_warnings(id,result)
         })
@@ -569,7 +587,9 @@ impl UsageStore {
             if !self.has_trace_schema()? { return Err(error("trace_attempt_not_found")); }
             let row: Option<(String,Option<String>)> = safe(self.db()?.query_row("SELECT a.payload,d.payload FROM trace_attempts a LEFT JOIN trace_details d ON d.source_id=a.source_id AND d.attempt_id=a.attempt_id WHERE a.source_id=? AND a.attempt_id=?",params![s(&source["id"]),attempt],|row|Ok((row.get(0)?,row.get(1)?))).optional())?;
             let (value,content) = row.ok_or_else(|| error("trace_attempt_not_found"))?;
-            self.with_trace_warnings(s(&source["id"]),json!({"attempt":parse(value)?,"content":content.as_ref().map(|v|parse(v.clone())).transpose()?,"contentRetained":content.is_some(),"warnings":[TRACE_WARNINGS[0],if content.is_some(){CONTENT_WARNING}else{"No local visible-text projection was retained for this attempt."}]}))
+            let mut value = parse(value)?;
+            value["timestampAnomaly"] = json!(timestamp_anomaly(&value));
+            self.with_trace_warnings(s(&source["id"]),json!({"attempt":value,"content":content.as_ref().map(|v|parse(v.clone())).transpose()?,"contentRetained":content.is_some(),"warnings":[TRACE_WARNINGS[0],if content.is_some(){CONTENT_WARNING}else{"No local visible-text projection was retained for this attempt."}]}))
         })
     }
     pub fn get_trace_summary(&self, input: &Value) -> CoreResult<Value> {
@@ -587,6 +607,7 @@ impl UsageStore {
             let mut groups: [BTreeMap<(String, String), Totals>; 5] =
                 std::array::from_fn(|_| BTreeMap::new());
             let mut groups_truncated = false;
+            let mut insights = TraceInsights::default();
             if self.has_trace_schema()? {
                 let sql = format!("SELECT a.payload FROM trace_attempts a WHERE {FILTER_SQL}");
                 let mut statement = safe(self.db()?.prepare(&sql))?;
@@ -595,6 +616,7 @@ impl UsageStore {
                 while let Some(row) = safe(rows.next())? {
                     let value = parse(safe(row.get(0))?)?;
                     total.add(&value);
+                    insights.add(&value);
                     status
                         .entry(s(&value["status"]).to_owned())
                         .or_default()
@@ -631,6 +653,7 @@ impl UsageStore {
                 .as_object_mut()
                 .expect("totals object")
                 .remove("count");
+            result["source"] = source.clone();
             result["attemptCount"] = json!(total.count.to_string());
             result["groupsTruncated"] = json!(groups_truncated);
             result["byStatus"] = Value::Array(
@@ -669,6 +692,7 @@ impl UsageStore {
                         .collect(),
                 );
             }
+            insights.echo(&mut result);
             filters.echo(&mut result);
             result["coverage"] = self.trace_coverage(id)?;
             result["warnings"] = json!(TRACE_WARNINGS);

@@ -1,6 +1,6 @@
 # Explicit local RolloutTrace bundle import
 
-Usage Lens v0.7.0 reads one deliberately selected, bounded local RolloutTrace
+Usage Lens v0.8.0 reads one deliberately selected, bounded local RolloutTrace
 bundle. It does not enable recording, discover trace directories, watch files,
 change client configuration, install anything, launch another process or make a
 model request. The import is a separate local write, outside the conversational
@@ -129,7 +129,8 @@ These commands read an existing database and remain outside the eight-command
 conversational Skill and eight-tool MCP boundary:
 
 ```sh
-'/ABSOLUTE/usage-lens' trace-attempts --db '/ABSOLUTE/private/usage.sqlite' --source 'SOURCE'
+'/ABSOLUTE/usage-lens' trace-attempts --db '/ABSOLUTE/private/usage.sqlite' --source 'SOURCE' \
+  --order oldest_first
 '/ABSOLUTE/usage-lens' trace-detail --db '/ABSOLUTE/private/usage.sqlite' --source 'SOURCE' \
   --attempt 'ATTEMPT_ID_FROM_TRACE_ATTEMPTS'
 '/ABSOLUTE/usage-lens' trace-summary --db '/ABSOLUTE/private/usage.sqlite' --source 'SOURCE' \
@@ -138,8 +139,9 @@ conversational Skill and eight-tool MCP boundary:
   --requested-effort 'EXACT_REQUESTED_EFFORT' --requested-tier 'EXACT_REQUESTED_TIER'
 ```
 
-`trace-attempts` accepts `--limit` from 1 through 500 (default 50), `--cursor`
-pagination and an optional paired `--from` / `--to` UTC date range. Dates are
+`trace-attempts` accepts `--order oldest_first|newest_first` (default
+`newest_first`), `--limit` from 1 through 500 (default 50), `--cursor` pagination
+and an optional paired `--from` / `--to` UTC date range. Dates are
 inclusive and assigned by the attempt start timestamp, not completion, import
 time or a quota reset. `trace-summary` accepts the same paired dates; omit both
 for its retained-source scope. A range must ascend and span at most 3,660 days
@@ -163,17 +165,31 @@ They never filter observed response values or map Fast/Standard labels.
 List rows, summary totals, token missingness and metadata groups use the same
 submitted scope. Result fields `fromDate`, `toDate`, `threadId`, `status`,
 `requestedModel`, `requestedReasoningEffort` and `requestedServiceTier` echo that
-scope, using null for absent filters. Cursors are bound to the source and every
-submitted filter, including dates. Changing or removing a filter requires a new
-first-page query; reusing a mismatched cursor fails. Pre-v0.7 trace cursors must
-also be restarted. Page size may change without changing the filter scope.
+scope, using null for absent filters. List results also echo `order`.
+Cursors are bound to the source and every submitted filter, including dates, plus
+order. Changing or removing a filter, or changing order, requires a new first-page
+query; reusing a mismatched cursor fails. Pre-v0.7 trace cursors and v0.7 trace
+cursor strings are rejected after the v0.8 upgrade; restart from the first page.
+Page size may change within the same scope.
+
+List order is deterministic recorded `startedAt` plus `attemptId`, with both keys
+ascending for `oldest_first` and descending for `newest_first`. Tied start times
+use the attempt ID as a stable tie-breaker. The importer requires and normalizes
+recorded start timestamps to UTC; import time is never a substitute. The store
+does not retain the original trace-event sequence. This is a recorded-clock
+inspection timeline, not causal order, event order or a measure of elapsed active
+time. List and detail attempts include boolean `timestampAnomaly`, true exactly
+when a known `completedAt` precedes `startedAt`; missing completion is not an
+anomaly. It is evidence about the timestamps, never latency.
 
 ### Local dashboard and query scopes
 
 The bilingual **Traces / 追踪** dashboard uses local `GET /api/traces`,
 `GET /api/traces/detail` and `GET /api/traces/summary`. List and summary HTTP
 filters are `threadId`, `status`, `requestedModel`, `requestedReasoningEffort` and
-`requestedServiceTier`, plus paired `fromDate` / `toDate`. Its submitted filters
+`requestedServiceTier`, plus paired `fromDate` / `toDate`. The list endpoint also
+accepts `order=oldest_first|newest_first` with the same default as CLI. Summary
+queries have no order parameter. Submitted filters
 share the CLI's exact-match rules and attempt-start UTC date basis. The **This UTC
 week** preset selects the current Monday–Sunday UTC calendar week; it does not identify a provider quota
 cycle. Pagination applies to the submitted filters, not unsubmitted input edits.
@@ -181,8 +197,17 @@ Submitting filters resets pagination and closes the selected detail. Loading
 and error states do not show a previous filter scope's rows or summary as current;
 late responses from an older submission are ignored. The detail reader shows
 optional supported visible text and safe metadata only. **View thread** applies
-the displayed exact thread ID alongside the submitted filters and starts a new
-first-page query; it does not infer relationships from similar text.
+the displayed exact thread ID alongside the submitted filters, selects
+`oldest_first` and starts a new first-page query. Other submitted date, status and
+requested-setting filters stay in effect, so the result is the matching part of
+that source's thread. It does not infer relationships from similar text. The
+English/Chinese thread, joint requested-setting and daily views use that same
+submitted summary scope and preserve unknowns and independent truncation notices.
+
+### Summary rows, limits and timestamp evidence
+
+The summary includes the selected `source` object; the dashboard verifies its
+`source.id` before accepting a response or enabling thread navigation.
 
 Summary groups distinguish `byRequestedModel`, `byRequestedReasoningEffort`,
 `byRequestedServiceTier`, `byObservedModel` and `byObservedServiceTier`. Each
@@ -192,6 +217,49 @@ totals still cover
 all matching retained attempts, independently of the group limit. They are not
 account-wide complete totals. Each token dimension reports its own missingness;
 a total with no reported token values is null, not an inferred zero.
+
+v0.8 adds three independently bounded arrays:
+
+- `byThread`: each row includes `threadId`, `firstStartedAt`, `lastStartedAt`,
+  `statusCounts` with all four `completed`, `failed`, `cancelled` and `incomplete`
+  decimal-string counts, and the common totals fields below. The timestamp bounds
+  are the earliest/latest recorded starts among matching retained attempts only;
+  they are not a full-thread lifetime, a completion bound, active time or latency
+- `byRequestedSettings`: each row includes `request` with full `{state, value}`
+  cells for `model`, `reasoningEffort` and `serviceTier`, plus the common totals
+  fields. Grouping uses the joint request tuple, preserving `reported`,
+  `not_reported` (explicit null), `omitted` and `invalid` states. Non-reported
+  values stay null, without default, observed-response or Fast/Standard inference
+- `byDay`: each row includes `date` (`YYYY-MM-DD`) and the common totals fields.
+  Dates come only from normalized recorded `startedAt` UTC. The importer requires
+  that timestamp; completion/import time is never substituted. Missing days are
+  absent/unknown, not synthetic zero rows
+
+Common row fields are `count`, `tokenAttemptCount`, `totals`, `tokenCoverage` and
+`timestampAnomalyCount`. Counts and reported token sums are exact decimal strings;
+per-token missingness is preserved and a dimension with no reported values stays
+null. `timestampAnomalyCount` counts attempts whose known `completedAt` is earlier
+than `startedAt`. This field also appears in the top-level summary totals and all
+existing `byStatus` and individual-metadata totals, not just the new arrays. The
+top-level attempt count remains `attemptCount` rather than `count`.
+
+Each new array retains at most 500 lexicographically smallest keys: thread ID for
+`byThread`, UTC date for `byDay`, and model state/value then reasoning-effort
+state/value then service-tier state/value for `byRequestedSettings`. Its independent
+boolean is respectively `threadsTruncated`, `daysTruncated` or
+`requestedSettingsTruncated`. These do not replace `groupsTruncated`, which still
+covers the existing individual-metadata arrays. Every retained group is complete
+for all matching attempts in that group, regardless of where its attempts occurred
+in the input. Top-level totals cover the full matching retained population even
+when any group array is truncated; adding only displayed rows may undercount it.
+
+All groups use the selected source and every submitted exact filter/date bound.
+A thread row excludes filtered-out parts of that thread. Rows are never joined
+across sources, immutable attempt/response ownership and deduplication are
+unchanged, and imported histories may overlap. No account-wide uniqueness,
+physical-request count, speed, quota or cost is inferred. Local `trace-summary`
+now intentionally exposes thread IDs, so its aggregate-looking shape does not
+make it eligible for the conversational Skill or MCP.
 
 Every trace query carries `importWarnings: {scope: "all_retained_source", codes,
 truncated}`. Safe codes come from the latest 100 retained imports for the source,
@@ -231,7 +299,9 @@ delivery or a charged request from the existence of an attempt.
 Sequence and lifecycle evidence, rather than wall-clock ordering, establish the
 recorded start/terminal association. A backward-moving source clock is preserved
 with a `trace_clock_regression` warning. It is not repaired with import time, and
-no duration or clock-corrected ordering is invented from it.
+no duration or clock-corrected ordering is invented from it. Import-time sequence
+association is distinct from the query timeline: original source sequence is not
+stored, and query sorting uses the recorded start clock and attempt ID only.
 
 ### Model, effort, service tier and tokens
 
@@ -300,9 +370,11 @@ a newly created source is a separate namespace with potentially overlapping
 counts, not recovery of the deleted source. These protections cannot reconstruct
 previously deleted pre-upgrade history or prove that named sources do not overlap.
 
-v0.7.0 read-only queries support schema 2, 3 and 4 rollback-journal stores without
-migration. Keep a compatible pre-upgrade backup for binary rollback. Do not try to
-open schema 4 with an older binary or modify schema numbers to bypass that check.
+v0.8.0 read-only queries support schema 2, 3 and 4 rollback-journal stores without
+migration. Thread/settings/day summaries and timeline ordering add no schema
+migration, new write path or change to immutable import/replay ownership. Keep a
+compatible pre-upgrade backup for binary rollback. Do not try to open schema 4
+with an older binary or modify schema numbers to bypass that check.
 
 ## Bounded bundle contract
 

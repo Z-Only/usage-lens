@@ -89,3 +89,28 @@ Verification for this changed UI requires fresh screenshots and interactions at
 1440/390/320px, English/light and Chinese/dark, date filtering, empty and partial
 evidence, unknown time, exact large counts, loading/error/retry and interrupted
 source/date changes. Earlier rendered checkpoints above do not verify this panel.
+
+## v0.8.0 local trace session insights
+
+The English/Chinese Traces reader adds source-local thread, joint requested-setting
+and recorded-start UTC-day views. They use the submitted filters, preserve exact
+decimal strings and per-token unknowns, and display independent thread/settings/day
+truncation notices. Global totals cover all matching retained attempts; a bounded
+set of visible groups is not the whole population. Missing days are absent/unknown.
+Joint settings retain request state/value distinctions instead of inventing
+Fast/Standard or default effort.
+
+Thread rows intentionally show local thread IDs, matching status counts and the
+earliest/latest matching recorded starts. **View thread** keeps other submitted
+filters and dates, selects oldest-first, dismisses old detail and begins a fresh
+page. General lists default newest-first. Ordering is `(startedAt, attemptId)`;
+source-event sequence is not retained and the view is not causal order. A backward
+completion flag/count is timestamp evidence, never latency, active time or speed.
+Sources remain separate and overlapping imports do not establish unique activity.
+
+These local views do not expand the conversational Skill/MCP boundary or enable
+capture. New loading/error/stale-response behavior, English/light and Chinese/dark
+screenshots, desktop/mobile widths and thread/order/pagination interactions require
+fresh exact-head browser evidence. Prior rendered checkpoints do not verify this
+release; implementation and verification remain pending the checks in
+[verification notes](verification.md).

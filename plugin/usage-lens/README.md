@@ -73,7 +73,7 @@ paths and values for the actual host shell. Installing the instruction-only Skil
 does not grant local execution permissions. The local database must already have
 been created and populated through separately authorized workflows. The dashboard,
 hooks, imports, and collectors remain independent of conversational setup.
-Persisted queries in v0.7.0 accept schema-2, schema-3 and schema-4 rollback-journal stores,
+Persisted queries in v0.8.0 accept schema-2, schema-3 and schema-4 rollback-journal stores,
 including normal older schema-2 stores, without migration. They fail rather than
 create or migrate a database. The separate `import-rollout-incremental` write is
 outside the Skill and MCP allowlists. Its first successful import upgrades to
@@ -92,7 +92,12 @@ same validations against the selected existing store read-only, reports predicte
 counts/replay/schema/content consequences, and makes no backup or persistent
 change. Future changes can invalidate it. Exact thread/status/requested metadata
 filters on trace lists/summaries remain local-only too. None is a ninth Skill
-command or MCP tool. See [trace import](../../docs/trace-import.md).
+command or MCP tool. In v0.8, thread, joint requested-setting and recorded-start
+UTC-day summaries are still local-only; `trace-summary` intentionally includes
+thread IDs. Deterministic oldest/newest recorded-start ordering is not causal
+order or latency. Existing trace cursors require a fresh first page because the
+cursor scope now includes order. The read-only additions introduce no migration
+or new write path. See [trace import](../../docs/trace-import.md).
 
 CLI queries share their returned aggregates with the assistant provider, just as
 MCP queries do. The skill must not send retained content or the database. Its

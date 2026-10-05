@@ -20,33 +20,35 @@ Record a short install plan: exact version, repository, asset, installation dire
 
 Canonical repository: [Z-Only/usage-lens](https://github.com/Z-Only/usage-lens)
 
-Open [published releases](https://github.com/Z-Only/usage-lens/releases), read the chosen release notes, and pin the exact stable version. `0.7.0` below is an example, not a claim that the release already exists. If its assets have not been published, stop; never substitute GitHub's automatically generated source archives for an executable release.
+Open [published releases](https://github.com/Z-Only/usage-lens/releases), read the chosen release notes, and pin the exact stable version. `0.8.0` below is an example, not a claim that the release already exists. If its assets have not been published, stop; never substitute GitHub's automatically generated source archives for an executable release.
 
-| Detected system | CPU | Asset for version `0.7.0` |
+| Detected system | CPU | Asset for version `0.8.0` |
 | --- | --- | --- |
-| Linux x64 (static musl) | x86_64 | `usage-lens-0.7.0-linux-x64.tar.gz` |
-| macOS 11.0 deployment target; tested on 15 | arm64 / Apple Silicon | `usage-lens-0.7.0-macos-arm64.tar.gz` |
-| macOS 11.0 deployment target; tested on 15 | x86_64 / Intel | `usage-lens-0.7.0-macos-x64.tar.gz` |
-| Windows x64 | AMD64 | `usage-lens-0.7.0-windows-x64.tar.gz` |
+| Linux x64 (static musl) | x86_64 | `usage-lens-0.8.0-linux-x64.tar.gz` |
+| macOS 11.0 deployment target; CI runner 15 | arm64 / Apple Silicon | `usage-lens-0.8.0-macos-arm64.tar.gz` |
+| macOS 11.0 deployment target; CI runner 15 | x86_64 / Intel | `usage-lens-0.8.0-macos-x64.tar.gz` |
+| Windows x64 | AMD64 | `usage-lens-0.8.0-windows-x64.tar.gz` |
+
+Require successful exact-release CI and extracted-artifact checks before installing; these platform labels do not establish that v0.8.0 passed them.
 
 The matching sidecar replaces `.tar.gz` with `.manifest.json`. Also download `SHA256SUMS` and `release.json` from **the same tag's release**. Assets include a native Rust executable, embedded Leptos UI, bundled SQLite, license, third-party license/notice bundles, documentation, and inert plugin examples. No Node, Bun, Rust, npm, compiler, or package installation is required on the user's computer. The Linux executable is statically linked with musl; it does not require a particular glibc version. Native OS/kernel compatibility still matters.
 
-Linux uses a static musl target and is smoke-tested on Ubuntu 24.04. Older kernels, CentOS 7, and Alpine are not claimed compatible without their own tests. Linux ARM, Windows ARM, 32-bit platforms, and macOS below 11.0 are not published targets. macOS 11–14 runtime behavior remains unverified; the compiler deployment target is not evidence of testing those OS versions. macOS architecture means the actual machine, not an emulated shell: on Apple Silicon with a Rosetta shell, inspect `sysctl -n hw.optional.arm64` and choose ARM64. On Windows inspect `[System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture`. Use `uname -s` and `uname -m` on Linux. Do not silently install an emulated or different-architecture build.
+Linux uses a static musl target; the configured smoke-test runner is Ubuntu 24.04. Older kernels, CentOS 7, and Alpine are not claimed compatible without their own tests. Linux ARM, Windows ARM, 32-bit platforms, and macOS below 11.0 are not published targets. macOS 11–14 runtime behavior remains unverified; the compiler deployment target is not evidence of testing those OS versions. macOS architecture means the actual machine, not an emulated shell: on Apple Silicon with a Rosetta shell, inspect `sysctl -n hw.optional.arm64` and choose ARM64. On Windows inspect `[System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture`. Use `uname -s` and `uname -m` on Linux. Do not silently install an emulated or different-architecture build.
 
-Windows builds use the static MSVC runtime. GitHub tests them on Windows Server 2025; Windows desktop versions require their own verification. A normal browser with JavaScript and WebAssembly support is needed for the dashboard; CLI/MCP do not need a browser. These first-release assets are not OS code-signed/notarized. If Gatekeeper, SmartScreen, antivirus, or a browser security warning blocks them, report the exact warning and hand control to the user. Do not remove quarantine, disable security, or bypass a warning.
+Windows builds use the static MSVC runtime. The configured GitHub test runner is Windows Server 2025; Windows desktop versions require their own verification. A normal browser with JavaScript and WebAssembly support is needed for the dashboard; CLI/MCP do not need a browser. These first-release assets are not OS code-signed/notarized. If Gatekeeper, SmartScreen, antivirus, or a browser security warning blocks them, report the exact warning and hand control to the user. Do not remove quarantine, disable security, or bypass a warning.
 
 ## 3. Download, verify, and inspect before execution
 
 Use the browser or an ordinary HTTPS download tool. Never use `curl | sh`, run an installer fetched from another site, or install packages to make a checksum command work. Example URL pattern:
 
 ```text
-https://github.com/Z-Only/usage-lens/releases/download/v0.7.0/usage-lens-0.7.0-macos-arm64.tar.gz
+https://github.com/Z-Only/usage-lens/releases/download/v0.8.0/usage-lens-0.8.0-macos-arm64.tar.gz
 ```
 
 In a new temporary download directory, the following POSIX example downloads only public release files. Set `platform` from the table, and set `version` to the version the user selected:
 
 ```sh
-version=0.7.0
+version=0.8.0
 platform=macos-arm64
 asset="usage-lens-${version}-${platform}.tar.gz"
 manifest="usage-lens-${version}-${platform}.manifest.json"
@@ -113,7 +115,7 @@ Do not bind to `0.0.0.0`, expose the port, open a firewall rule, or establish a 
 
 Explain the intended absolute database path, what will be retained, and which operation the user is authorizing. Keep data outside the executable directory, cloud-synced folders, and repositories. The default is no content capture. Create an explicit imported source only when requested:
 
-**v0.7.0 trace upgrade warning:** before the first successful
+**v0.8.0 trace upgrade warning:** before the first successful
 `import-trace-bundle` into an existing store, stop all writers and make a verified
 private backup. This explicit import upgrades schema 2/3 to schema 4 atomically;
 v0.5.0 and older cannot read schema 4. Read-only queries accept schemas 2/3/4
@@ -121,7 +123,11 @@ without migration. A latest Mac app or Local-mode selection does not establish
 that its runtime supports `CODEX_ROLLOUT_TRACE_ROOT` or inherits that environment
 variable. Live desktop activation remains unverified and requires separate user
 authorization. Do not change launch configuration or run a model to test this as
-part of installation. See [trace import](trace-import.md).
+part of installation. The v0.8 thread/settings/day summaries and timeline ordering
+add no database migration or new write path. Restart v0.7-or-older trace cursors
+from a fresh first page; order is now bound into the cursor scope. These local
+queries, including summaries containing thread IDs, stay outside Skill/MCP.
+See [trace import](trace-import.md).
 
 **v0.4.0 upgrade warning:** before the first successful
 `import-rollout-incremental` into an existing store, stop all writers and make a
@@ -193,7 +199,7 @@ to the chosen Skill directory. Replace `install_root` with the actual extracted
 release directory. This POSIX example refuses to overwrite an existing Skill:
 
 ```sh
-install_root='/ABSOLUTE/usage-lens-0.7.0'
+install_root='/ABSOLUTE/usage-lens-0.8.0'
 skills_root="$HOME/.agents/skills"
 destination="$skills_root/usage-summary"
 if [ -e "$destination" ] || [ -L "$destination" ]; then
@@ -207,7 +213,7 @@ Equivalent Windows PowerShell (no administrator permissions):
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$installRoot = 'C:\ABSOLUTE\usage-lens-0.7.0'
+$installRoot = 'C:\ABSOLUTE\usage-lens-0.8.0'
 $skillsRoot = Join-Path $HOME '.agents\skills'
 $destination = Join-Path $skillsRoot 'usage-summary'
 if (Test-Path -LiteralPath $destination) { throw 'Skill already exists; review an explicit upgrade before replacing it.' }
@@ -265,7 +271,7 @@ is a separate setup diagnostic and is outside the Skill. The local `skills` evid
 command is explicitly outside the conversational allowlist; never use it as a
 fallback or send its individual event/session/turn records to an assistant.
 
-Persisted queries in v0.7.0 open the existing database read-only. They support
+Persisted queries in v0.8.0 open the existing database read-only. They support
 schema 2, 3 or 4 and rollback-journal mode; normal v0.1.0 stores remain compatible
 without migration, as do v0.1.1, v0.2.0 and v0.3.0 schema-2 stores. Querying never
 upgrades a store. Successful explicit incremental import can upgrade schema 2 to
@@ -317,7 +323,7 @@ Finish with the exact installed version/commit, path, demo result, data location
 
 ## Upgrade, rollback, and uninstall
 
-**For v0.7.0, verify a closed-store backup before the first trace import.**
+**For v0.8.0, verify a closed-store backup before the first trace import.**
 Successful explicit trace import upgrades schema 2/3 to 4; v0.5.0 and older cannot
 read it. Failed validation does not migrate. Query-only use does not migrate older
 stores. A rollback needs a separate compatible copy of the pre-upgrade backup;

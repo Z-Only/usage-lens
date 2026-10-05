@@ -19,7 +19,7 @@ its result, confirmed by the user or their existing configuration. If the intend
 source is ambiguous, ask. Never merge sources, substitute another store, or present
 a demo source as the user's account. A missing/unreadable store or failed query is
 an error; do not create a source, initialize a store, or refresh collection to fix it.
-Persisted queries in v0.7.0 accept an existing schema-2, schema-3 or schema-4 rollback-journal
+Persisted queries in v0.8.0 accept an existing schema-2, schema-3 or schema-4 rollback-journal
 database; older schema-2 stores remain compatible without migration. `unsupported_schema` means the schema is not
 supported; `storage_error` can mean a missing/unreadable/invalid store or unsupported
 WAL mode. Report the error without guessing its cause. Never run migrations,
@@ -118,8 +118,12 @@ answer a query, populate missing evidence or repair an unsupported schema.
 Trace import is another separate write. Its first successful explicit import
 upgrades schema 2/3 to schema 4; v0.5.0 and older cannot read it, so verify a
 closed-store backup first. Local trace queries remain outside this skill's eight
-commands even when they return a summary. Do not activate upstream tracing or
-change desktop configuration to answer a query.
+commands even when they return a summary. v0.8 local summaries intentionally
+include thread IDs, alongside joint requested-setting and recorded-start UTC-day
+rows. They are not a new conversational aggregate. Do not expose them through
+this skill, invent cross-source identities, or infer latency, speed, quota or cost
+from recorded clock order/anomalies. Do not activate upstream tracing or change
+desktop configuration to answer a query.
 
 Never transmit raw bodies, prompts, tool arguments/results, titles, file contents,
 or the database to a model through this skill. Query results themselves are shared

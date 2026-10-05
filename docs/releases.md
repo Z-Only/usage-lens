@@ -13,6 +13,52 @@ Usage Lens follows [Semantic Versioning](https://semver.org/). The initial publi
 
 The publishing pipeline currently accepts stable `vMAJOR.MINOR.PATCH` tags only, with no leading zeros. Prerelease/build-metadata tags require a reviewed workflow change first. All source, workflow, version, and changelog changes go through a PR and the required tests.
 
+## v0.8.0 trace session-insight compatibility
+
+This batch prepares source-local thread summaries, joint requested-setting
+breakdowns, recorded-start UTC daily rows and oldest/newest timeline ordering.
+The local production gate has passed as recorded in [verification](verification.md);
+release verification still requires fresh exact-head remote CI and extracted
+artifacts. This documentation and the version bump are not publication.
+The complete field/scope/limit contract is in the already packaged
+[trace guide](trace-import.md#summary-rows-limits-and-timestamp-evidence).
+
+`byThread`, `byRequestedSettings` and `byDay` each retain at most 500
+lexicographically smallest groups, with independent `threadsTruncated`,
+`requestedSettingsTruncated` and `daysTruncated` flags. Retained groups are complete
+for the submitted source, exact filters and dates; global totals cover every
+matching retained attempt. Thread bounds are recorded starts, not active time or
+latency. Joint grouping preserves full request state/value cells. Missing dates
+are unknown and absent; no import-time replacement or zero filling is introduced.
+All trace totals add decimal-string `timestampAnomalyCount`, and attempt
+list/detail rows add boolean `timestampAnomaly` for known completion before start.
+No causal, speed, quota, cost or account-wide uniqueness inference is added.
+
+CLI `trace-attempts --order oldest_first|newest_first` and HTTP list `order` default
+to `newest_first`. They deterministically sort recorded `startedAt` plus `attemptId`
+in the chosen direction; original event sequence is not retained. The
+English/Chinese **View thread** flow preserves submitted filters and starts
+oldest-first. List responses echo order and cursors bind it along with source and
+all filters. **v0.7 and older trace cursors must restart at the first page.** No
+new order parameter applies to summaries.
+
+There is no new schema, migration or write path. Schema-4 trace storage,
+read-only schema-2/3/4 support, immutable attempt/response ownership and deduplication,
+import replay/deletion rules, capture-off default and opt-in redacted content
+boundaries are unchanged. Existing explicit trace imports still require the
+closed-store backup precautions below. Thread summaries now intentionally include
+local thread IDs, so all trace queries remain outside the unchanged eight-command
+Skill and eight-tool MCP allowlists. Sources are never joined; imported histories
+can overlap.
+
+Before publication, require exact-commit production coverage/static/native tests,
+browser screenshots and interactions in English/Chinese at desktop/mobile widths,
+native cross-platform CI and all extracted-artifact smoke. Verify order/cursor
+scope and restart, tied timestamps, anomalies, normalized UTC days, complete
+retained groups under independent truncation, exact large totals, missingness,
+read-only compatibility and unchanged MCP discovery. No Mac activation, live
+collection, credentials or real-client validation is included.
+
 ## v0.7.0 trace workflow compatibility
 
 This batch adds a read-only trace import preflight, exact trace list/summary
