@@ -62,7 +62,8 @@
       }
     },
     "evidence": "prepared_request",
-    "contentRetained": true
+    "contentRetained": true,
+    "timestampAnomaly": false
   },
   "list": {
     "source": {
@@ -145,10 +146,12 @@
           }
         },
         "evidence": "prepared_request",
-        "contentRetained": true
+        "contentRetained": true,
+        "timestampAnomaly": false
       }
     ],
-    "nextCursor": "trace-next"
+    "nextCursor": "trace-next",
+    "order": "newest_first"
   },
   "summary": {
     "fromDate": null,
@@ -262,7 +265,8 @@
             "notReportedCount": "0",
             "invalidCount": "0"
           }
-        }
+        },
+        "timestampAnomalyCount": "0"
       }
     ],
     "byRequestedModel": [
@@ -316,7 +320,8 @@
             "notReportedCount": "0",
             "invalidCount": "0"
           }
-        }
+        },
+        "timestampAnomalyCount": "0"
       }
     ],
     "byRequestedReasoningEffort": [
@@ -370,7 +375,8 @@
             "notReportedCount": "0",
             "invalidCount": "0"
           }
-        }
+        },
+        "timestampAnomalyCount": "0"
       }
     ],
     "byRequestedServiceTier": [
@@ -424,7 +430,8 @@
             "notReportedCount": "0",
             "invalidCount": "0"
           }
-        }
+        },
+        "timestampAnomalyCount": "0"
       }
     ],
     "byObservedModel": [
@@ -478,7 +485,8 @@
             "notReportedCount": "0",
             "invalidCount": "0"
           }
-        }
+        },
+        "timestampAnomalyCount": "0"
       }
     ],
     "byObservedServiceTier": [
@@ -532,7 +540,198 @@
             "notReportedCount": "0",
             "invalidCount": "0"
           }
+        },
+        "timestampAnomalyCount": "0"
+      }
+    ],
+    "source": {
+      "id": "demo"
+    },
+    "timestampAnomalyCount": "0",
+    "threadsTruncated": false,
+    "requestedSettingsTruncated": false,
+    "daysTruncated": false,
+    "byThread": [
+      {
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        },
+        "timestampAnomalyCount": "0",
+        "count": "1",
+        "threadId": "synthetic-thread",
+        "firstStartedAt": "2026-10-01T12:00:00.000Z",
+        "lastStartedAt": "2026-10-01T12:00:00.000Z",
+        "statusCounts": {
+          "completed": "1",
+          "failed": "0",
+          "cancelled": "0",
+          "incomplete": "0"
         }
+      }
+    ],
+    "byRequestedSettings": [
+      {
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        },
+        "timestampAnomalyCount": "0",
+        "count": "1",
+        "request": {
+          "model": {
+            "state": "reported",
+            "value": "requested-model"
+          },
+          "reasoningEffort": {
+            "state": "reported",
+            "value": "high"
+          },
+          "serviceTier": {
+            "state": "reported",
+            "value": "priority"
+          }
+        }
+      }
+    ],
+    "byDay": [
+      {
+        "tokenAttemptCount": "1",
+        "totals": {
+          "inputTokens": "9007199254740993123",
+          "cachedInputTokens": "30",
+          "cacheWriteInputTokens": null,
+          "outputTokens": "200",
+          "reasoningOutputTokens": "80",
+          "totalTokens": "9007199254740993323"
+        },
+        "tokenCoverage": {
+          "inputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cachedInputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "cacheWriteInputTokens": {
+            "reportedCount": "0",
+            "omittedCount": "1",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "outputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "reasoningOutputTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          },
+          "totalTokens": {
+            "reportedCount": "1",
+            "omittedCount": "0",
+            "notReportedCount": "0",
+            "invalidCount": "0"
+          }
+        },
+        "timestampAnomalyCount": "0",
+        "count": "1",
+        "date": "2026-10-01"
       }
     ]
   },
@@ -600,7 +799,8 @@
         }
       },
       "evidence": "prepared_request",
-      "contentRetained": true
+      "contentRetained": true,
+      "timestampAnomaly": false
     },
     "content": {
       "requestProjection": {

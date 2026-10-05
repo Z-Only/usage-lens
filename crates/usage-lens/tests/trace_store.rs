@@ -425,7 +425,8 @@ fn summaries_keep_requested_observed_unknowns_and_exact_token_evidence_separate(
     assert_ne!(summary["byRequestedModel"], summary["byObservedModel"]);
     assert!(summary["threadId"].is_null());
     let text = summary.to_string();
-    assert!(!text.contains("\"thread\""));
+    // Thread identifiers are intentionally exposed by the local-only thread breakdown.
+    assert_eq!(summary["byThread"][0]["threadId"], "thread");
     for forbidden in [
         "sourceId",
         "turnId",

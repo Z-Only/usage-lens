@@ -150,6 +150,34 @@ impl Filters {
 }
 pub const TRACE_STATUSES: [&str; 4] = ["completed", "failed", "cancelled", "incomplete"];
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TraceOrder {
+    #[default]
+    NewestFirst,
+    OldestFirst,
+}
+impl TraceOrder {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "newest_first" => Some(Self::NewestFirst),
+            "oldest_first" => Some(Self::OldestFirst),
+            _ => None,
+        }
+    }
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::NewestFirst => "newest_first",
+            Self::OldestFirst => "oldest_first",
+        }
+    }
+    pub fn label(self, l: Language) -> &'static str {
+        match self {
+            Self::NewestFirst => l.text("Newest first", "最新在前"),
+            Self::OldestFirst => l.text("Oldest first", "最早在前"),
+        }
+    }
+}
+
 /// Exact local trace scope. Empty draft fields are omitted, never trimmed or inferred.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TraceFilters {
@@ -269,6 +297,8 @@ pub struct State {
     pub applied_token_period: Filters,
     pub trace_filters: TraceFilters,
     pub applied_trace_filters: TraceFilters,
+    pub trace_order: TraceOrder,
+    pub applied_trace_order: TraceOrder,
     pub kind: String,
     pub selected: Value,
     pub settings: Value,
@@ -292,6 +322,8 @@ impl Default for State {
             applied_token_period: Filters::default(),
             trace_filters: TraceFilters::default(),
             applied_trace_filters: TraceFilters::default(),
+            trace_order: TraceOrder::default(),
+            applied_trace_order: TraceOrder::default(),
             kind: "requested".into(),
             selected: Value::Null,
             settings: json!({"capturePaused":false,"contentCaptureEnabled":false,"retentionDays":30}),
@@ -463,6 +495,9 @@ impl State {
             ),
             Slot::Mutation => ("settings", vec![]),
         };
+        if slot == Slot::Traces {
+            query.push(("order", self.applied_trace_order.key().into()));
+        }
         if slot != Slot::Status && slot != Slot::Mutation {
             query.push(("sourceId", self.source.clone()));
         }
@@ -618,6 +653,11 @@ impl State {
                     "traceModel" => self.trace_filters.requested_model = value,
                     "traceEffort" => self.trace_filters.requested_reasoning_effort = value,
                     "traceTier" => self.trace_filters.requested_service_tier = value,
+                    "traceOrder" => {
+                        if let Some(order) = TraceOrder::parse(&value) {
+                            self.trace_order = order;
+                        }
+                    }
                     _ => {}
                 }
                 if ["from", "to", "skillName"].contains(&field) {
@@ -644,16 +684,19 @@ impl State {
                 self.page = Page::Traces;
                 self.trace_filters = self.applied_trace_filters.clone();
                 self.trace_filters.thread_id = thread;
+                self.trace_order = TraceOrder::OldestFirst;
                 self.dispatch(Action::ApplyTraceFilters)
             }
             Action::ResetTraceFilters => {
                 self.trace_filters = TraceFilters::default();
+                self.trace_order = TraceOrder::default();
                 self.dispatch(Action::ApplyTraceFilters)
             }
             Action::ApplyTraceFilters => {
                 self.selected = Value::Null;
                 self.invalidate(Slot::TraceDetail);
                 self.applied_trace_filters = self.trace_filters.clone();
+                self.applied_trace_order = self.trace_order;
                 self.invalidate(Slot::Traces);
                 self.invalidate(Slot::TraceSummary);
                 let mut jobs = self.dispatch(Action::Load(Slot::Traces, false));
@@ -828,9 +871,7 @@ impl State {
             }
         };
         if request.slot != Slot::Status && request.slot != Slot::Mutation {
-            let response_source = if request.slot == Slot::TraceSummary {
-                &request.source
-            } else if request.slot == Slot::TraceDetail {
+            let response_source = if request.slot == Slot::TraceDetail {
                 string(&value["attempt"]["sourceId"])
             } else if request.slot == Slot::Detail {
                 string(&value["event"]["sourceId"])
@@ -845,6 +886,12 @@ impl State {
                 && !self.applied_trace_filters.matches(&value)
             {
                 current.error = "filter_mismatch".into();
+                return vec![];
+            }
+            if request.slot == Slot::Traces
+                && string(&value["order"]) != self.applied_trace_order.key()
+            {
+                current.error = "order_mismatch".into();
                 return vec![];
             }
             if request.slot == Slot::TraceDetail

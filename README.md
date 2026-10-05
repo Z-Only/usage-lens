@@ -157,9 +157,10 @@ Skill metrics distinguish requested, read/loaded, and explicitly recorded invoca
 
 ## Selected local trace bundles
 
-v0.7.0 adds a read-only import preview, exact trace filters and actionable schema/
-backup diagnostics to the bounded, one-shot importer introduced in v0.6.0 for the
-public Codex `rust-v0.160.0` RolloutTrace contract. **Stop writers and back up an existing store before its
+v0.8.0 adds source-local thread summaries, joint requested-setting groups,
+recorded-start UTC daily rows and a selectable timeline order. It retains the
+read-only import preview, exact filters and schema/backup diagnostics for the
+bounded, one-shot public Codex `rust-v0.160.0` RolloutTrace importer. **Stop writers and back up an existing store before its
 first trace import:** success upgrades schema 2/3 to schema 4; v0.5.0 and older
 cannot read schema 4. Queries never migrate an older store.
 
@@ -183,7 +184,22 @@ startup or model request occurs. `trace-attempts`, `trace-detail` and
 The bilingual Traces page uses the same local evidence and exact thread, status,
 requested-model, requested-effort and requested-tier filters as the local CLI/HTTP
 queries, with paired UTC dates and a Monday–Sunday UTC-week preset. That calendar
-week is not a quota cycle. Optional visible text is a redacted projection; raw files remain untouched.
+week is not a quota cycle. Its English/Chinese thread, joint requested-setting and
+daily views share the submitted filters. **View thread** preserves those filters
+and starts at `oldest_first`; CLI/HTTP lists otherwise default to `newest_first`.
+Ordering uses recorded `startedAt` plus `attemptId`, never causal/event order.
+Restart existing trace cursors after upgrading: order is now part of their scope.
+
+Each new summary view retains at most 500 lexicographically first groups, with
+independent truncation flags and complete totals for each retained group. Global
+totals include all matching retained attempts. Thread rows intentionally include
+local thread IDs; they never include filtered-out parts of a thread or join other
+sources. Imported histories can overlap. Missing days and unreported tokens remain
+unknown. Timestamp anomalies identify completion before start, without inferring
+latency, active time, speed, quota or cost. Optional visible text is a redacted
+projection; raw files remain untouched. No database migration or new write path
+is introduced by these queries. Release validation remains pending the exact-head
+checks in [verification notes](docs/verification.md).
 
 A trace request is prepared-request evidence, recorded before transmission; a
 WebSocket warmup can produce logical full input rather than exact wire bytes.
@@ -235,7 +251,7 @@ No model, success, unique-execution, or per-skill token attribution is inferred.
 The local `skills` evidence command is outside this conversational allowlist.
 The instruction-level allowlist is not an OS sandbox. Persisted queries open an
 existing schema-2, schema-3 or schema-4 rollback-journal store read-only; normal
-older schema-2/3 databases remain query-compatible without migration in v0.7.0. Queries
+older schema-2/3 databases remain query-compatible without migration in v0.8.0. Queries
 fail rather than create or migrate a store. Incremental import is a separate
 explicit write workflow, outside the Skill's eight-command allowlist and optional
 MCP tools. It does not install a background process or make collection automatic.

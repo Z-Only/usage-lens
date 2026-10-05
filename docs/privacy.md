@@ -87,13 +87,20 @@ content sharing. `doctor` compatibility/backup guidance reads no extra files or
 processes and never claims a verified backup or live desktop compatibility.
 
 Local `trace-attempts`, `trace-detail` and `trace-summary` are outside the Skill
-and MCP's unchanged eight aggregate commands/tools. Request settings and response
+and MCP's unchanged eight aggregate commands/tools. In v0.8, the local summary
+intentionally includes thread IDs in `byThread`; a summary label is not permission
+to share those identities with an assistant provider. Source-local thread,
+joint-setting and daily rows preserve submitted exact filters and date bounds,
+and never merge sources or infer unique account-wide histories. Recorded-clock
+ordering and timestamp-anomaly flags/counts do not establish causal order, active
+time, latency, speed, quota or cost. These are read-only additions with no new
+write path or schema migration. Request settings and response
 completion evidence remain distinct. A prepared request is not transmission,
 delivery or billing proof; raw diagnostic files do not establish complete history.
 
 **Back up the closed store before its first successful explicit trace import.**
 It upgrades schema 2/3 to schema 4 atomically. v0.5.0 and older cannot read schema 4;
-read-only queries in v0.7.0 also support schema 2/3 without automatic migration.
+read-only queries in v0.8.0 also support schema 2/3 without automatic migration.
 Latest Mac app/Local mode does not establish runtime or environment compatibility;
 live desktop capture validation remains pending separate user authorization.
 

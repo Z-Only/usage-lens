@@ -120,5 +120,10 @@ response-token period fields above remain `not_recorded`; importing trace metada
 does not fabricate joins into that response population. Trace requests are not
 universal exact-wire evidence or delivery/billing proof. The new schema-4 upgrade
 happens only on successful explicit trace import and requires a backup; v0.5.0 and
-older cannot read that upgraded store. v0.7.0 queries still read schema 2/3 without
-migration. The eight conversational CLI/MCP aggregate allowlists remain unchanged.
+older cannot read that upgraded store. v0.8.0 queries still read schema 2/3 without
+migration. The v0.8 source-local thread, joint requested-setting and recorded-start
+UTC-day summaries add no migration or new write path. Their clock-based timelines
+and anomaly counts are not causal order, active time, latency or speed; overlapping
+histories are not account-wide unique activity. Local summaries intentionally
+include thread IDs. The eight conversational CLI/MCP aggregate allowlists remain
+unchanged; see the [trace query contract](trace-import.md#local-queries).

@@ -107,7 +107,10 @@ fn trace_navigation_loads_local_endpoints_and_separate_submitted_dates() {
         jobs.iter().map(|r| r.slot).collect::<Vec<_>>(),
         vec![Slot::Traces, Slot::TraceSummary]
     );
-    assert_eq!(jobs[0].path, "/api/traces?limit=20&sourceId=demo");
+    assert_eq!(
+        jobs[0].path,
+        "/api/traces?limit=20&order=newest_first&sourceId=demo"
+    );
     assert_eq!(jobs[1].path, "/api/traces/summary?sourceId=demo");
     s.dispatch(Action::Filter("traceFrom", "2026-10-01".into()));
     s.dispatch(Action::Filter("traceTo", "2026-10-07".into()));
@@ -684,7 +687,11 @@ fn thread_navigation_uses_submitted_scope_and_cancels_older_detail_list_summary(
         && r.path.contains("threadId=synthetic-thread")
         && !r.path.contains("cursor=")));
     for r in jobs {
-        s.complete(&r, Ok(scoped_fixture(r.slot, &expected)));
+        let mut result = scoped_fixture(r.slot, &expected);
+        if r.slot == Slot::Traces {
+            result["order"] = json!("oldest_first");
+        }
+        s.complete(&r, Ok(result));
     }
     let html = render(s);
     assert!(html.contains("synthetic-thread"));
@@ -760,7 +767,10 @@ fn utc_week_preserves_exact_drafts_and_reset_clears_every_submitted_filter() {
     let reset = s.dispatch(Action::ResetTraceFilters);
     assert_eq!(s.trace_filters, TraceFilters::default());
     assert_eq!(s.applied_trace_filters, TraceFilters::default());
-    assert_eq!(reset[0].path, "/api/traces?limit=20&sourceId=demo");
+    assert_eq!(
+        reset[0].path,
+        "/api/traces?limit=20&order=newest_first&sourceId=demo"
+    );
     assert_eq!(reset[1].path, "/api/traces/summary?sourceId=demo");
     assert!(jobs.iter().all(|r| !s.accepts(r)));
 }
@@ -837,5 +847,380 @@ fn exact_filter_controls_submitted_scopes_and_navigation_render_safely_in_both_l
         no_source.source.clear();
         let html = render_with(no_source, trace_page);
         assert!(html.contains("disabled"));
+    }
+}
+
+#[test]
+fn timeline_order_is_a_validated_draft_and_only_trace_lists_receive_it() {
+    assert_eq!(TraceOrder::default(), TraceOrder::NewestFirst);
+    for order in [TraceOrder::NewestFirst, TraceOrder::OldestFirst] {
+        assert_eq!(TraceOrder::parse(order.key()), Some(order));
+        for l in [Language::English, Language::Chinese] {
+            assert!(!order.label(l).is_empty());
+        }
+    }
+    let mut s = state();
+    for value in ["", "oldest", "oldest_first ", "newest_first&threadId=other"] {
+        assert_eq!(TraceOrder::parse(value), None);
+        assert!(
+            s.dispatch(Action::Filter("traceOrder", value.into()))
+                .is_empty()
+        );
+        assert_eq!(s.trace_order, TraceOrder::NewestFirst);
+    }
+    let initial = request(&mut s, Slot::Traces);
+    assert!(initial.path.contains("order=newest_first"));
+    let action = InputAction::Filter("traceOrder").action("oldest_first".into());
+    assert_eq!(action.repaint(), (false, false));
+    assert!(s.dispatch(action).is_empty());
+    assert_eq!(s.trace_order, TraceOrder::OldestFirst);
+    assert_eq!(s.applied_trace_order, TraceOrder::NewestFirst);
+    assert!(s.accepts(&initial));
+    s.complete(&initial, Ok(fixture("list")));
+    assert_eq!(s.error(Slot::Traces), "");
+    let more = s.dispatch(Action::Load(Slot::Traces, true)).remove(0);
+    assert!(more.path.contains("order=newest_first"));
+    assert!(more.path.contains("cursor=trace-next"));
+    let jobs = s.dispatch(Action::ApplyTraceFilters);
+    assert_eq!(s.applied_trace_order, TraceOrder::OldestFirst);
+    assert!(!s.accepts(&more));
+    assert!(s.data(Slot::Traces).is_null());
+    assert!(jobs[0].path.contains("order=oldest_first"));
+    assert!(jobs.iter().all(|r| !r.path.contains("cursor=")));
+    assert!(!jobs[1].path.contains("order="));
+    let mut result = fixture("list");
+    result["order"] = json!("oldest_first");
+    s.complete(&jobs[0], Ok(result));
+    assert_eq!(s.error(Slot::Traces), "");
+    let more = s.dispatch(Action::Load(Slot::Traces, true)).remove(0);
+    assert!(more.path.contains("order=oldest_first"));
+    let mut result = fixture("list");
+    result["order"] = json!("oldest_first");
+    result["attempts"][0]["attemptId"] = json!("chronological-next");
+    s.complete(&more, Ok(result));
+    assert_eq!(
+        s.data(Slot::Traces)["attempts"][1]["attemptId"],
+        "chronological-next"
+    );
+    for slot in [
+        Slot::TraceSummary,
+        Slot::Overview,
+        Slot::Activity,
+        Slot::ResponseRecords,
+        Slot::SkillSummary,
+    ] {
+        let jobs = s.dispatch(Action::Load(slot, false));
+        assert!(jobs.iter().all(|r| !r.path.contains("order=")));
+    }
+    let detail = s.dispatch(Action::Select(fixture("attempt"))).remove(0);
+    assert!(!detail.path.contains("order="));
+    let reset = s.dispatch(Action::ResetTraceFilters);
+    assert_eq!(s.trace_order, TraceOrder::NewestFirst);
+    assert_eq!(s.applied_trace_order, TraceOrder::NewestFirst);
+    assert!(reset[0].path.contains("order=newest_first"));
+}
+
+#[test]
+fn order_echo_source_identity_and_generation_are_required_before_showing_trace_evidence() {
+    for order in [TraceOrder::NewestFirst, TraceOrder::OldestFirst] {
+        for wrong in [
+            Value::Null,
+            json!("invalid"),
+            json!(if order == TraceOrder::NewestFirst {
+                "oldest_first"
+            } else {
+                "newest_first"
+            }),
+        ] {
+            let mut s = state();
+            s.trace_order = order;
+            let request = s.dispatch(Action::ApplyTraceFilters).remove(0);
+            let mut result = fixture("list");
+            result["order"] = wrong;
+            s.complete(&request, Ok(result));
+            assert_eq!(s.error(Slot::Traces), "order_mismatch");
+            assert!(s.data(Slot::Traces).is_null());
+            let retry = s.dispatch(s.retry_action(Slot::Traces)).remove(0);
+            assert!(retry.path.contains(&format!("order={}", order.key())));
+        }
+    }
+    for slot in [Slot::Traces, Slot::TraceSummary] {
+        for source in [Value::Null, json!({"id":"other"}), json!({"id":""})] {
+            let mut s = state();
+            let r = s
+                .dispatch(Action::ApplyTraceFilters)
+                .into_iter()
+                .find(|r| r.slot == slot)
+                .unwrap();
+            let mut result = fixture(if slot == Slot::Traces {
+                "list"
+            } else {
+                "summary"
+            });
+            result["source"] = source;
+            s.complete(&r, Ok(result));
+            assert_eq!(s.error(slot), "source_mismatch");
+            assert!(s.data(slot).is_null());
+        }
+    }
+    let mut s = state();
+    let oldest = s.dispatch(Action::TraceThread {
+        source: "demo".into(),
+        thread: "synthetic-thread".into(),
+    });
+    assert_eq!(s.trace_order, TraceOrder::OldestFirst);
+    s.dispatch(Action::Source("other".into()));
+    for r in oldest {
+        assert!(!s.accepts(&r));
+        let mut result = scoped_fixture(
+            r.slot,
+            &TraceFilters {
+                thread_id: "synthetic-thread".into(),
+                ..TraceFilters::default()
+            },
+        );
+        result["order"] = json!("oldest_first");
+        s.complete(&r, Ok(result));
+        assert!(s.data(r.slot).is_null());
+    }
+    assert!(
+        s.dispatch(Action::TraceThread {
+            source: "demo".into(),
+            thread: "synthetic-thread".into()
+        })
+        .is_empty()
+    );
+}
+
+#[test]
+fn thread_timeline_replaces_draft_order_while_week_submits_it() {
+    let mut s = state();
+    s.trace_filters = exact_filters();
+    s.dispatch(Action::ApplyTraceFilters);
+    s.dispatch(Action::Filter("traceOrder", "newest_first".into()));
+    s.dispatch(Action::Filter("traceEffort", "draft-low".into()));
+    let jobs = s.dispatch(Action::TraceThread {
+        source: "demo".into(),
+        thread: "selected-thread".into(),
+    });
+    assert_eq!(s.trace_order, TraceOrder::OldestFirst);
+    assert_eq!(s.applied_trace_order, TraceOrder::OldestFirst);
+    assert!(jobs[0].path.contains("order=oldest_first"));
+    assert!(jobs[0].path.contains("requestedReasoningEffort=high"));
+    assert!(
+        jobs.iter()
+            .all(|r| !r.path.contains("draft-low") && !r.path.contains("detail"))
+    );
+    s.dispatch(Action::Filter("traceOrder", "newest_first".into()));
+    let week = s.dispatch(Action::TraceWeek("2026-10-05T00:00:00Z".into()));
+    assert!(week[0].path.contains("order=newest_first"));
+    assert_eq!(s.applied_trace_order, TraceOrder::NewestFirst);
+    for old in jobs {
+        assert!(!s.accepts(&old));
+        s.complete(&old, Err("stale_thread_error".into()));
+        assert_ne!(s.error(old.slot), "stale_thread_error");
+    }
+}
+
+#[test]
+fn trace_insights_precede_timeline_and_render_accessible_order_and_exact_counts_bilingually() {
+    for l in [Language::English, Language::Chinese] {
+        let mut s = state();
+        s.language = l;
+        let html = render(s.clone());
+        for text in [
+            l.text("Thread summaries", "会话摘要"),
+            l.text("Requested settings comparison", "请求设置对比"),
+            l.text("UTC-day breakdown", "UTC 每日明细"),
+            l.text("Trace timeline", "追踪时间线"),
+            l.text("First matched start (UTC)", "首条匹配开始时间（UTC）"),
+            l.text("Last matched start (UTC)", "末条匹配开始时间（UTC）"),
+            l.text(
+                "only records matching the submitted filters",
+                "仅包含匹配已提交筛选的记录",
+            ),
+            l.text(
+                "not causal order or request latency",
+                "不代表因果顺序或请求延迟",
+            ),
+            l.text(
+                "Missing UTC days are absent evidence",
+                "缺少的 UTC 日期表示证据缺失",
+            ),
+            l.text("not import time or quota cycles", "不是导入时间或额度周期"),
+            l.text("View thread synthetic-thread", "查看会话 synthetic-thread"),
+            "9,007,199,254,740,993,323",
+        ] {
+            assert!(html.contains(text), "missing {text}");
+        }
+        let threads = html.find("id=\"trace-threads-title\"").unwrap();
+        let settings = html.find("id=\"trace-settings-title\"").unwrap();
+        let days = html.find("id=\"trace-days-title\"").unwrap();
+        let timeline = html.find("id=\"trace-timeline-title\"").unwrap();
+        assert!(threads < settings && settings < days && days < timeline);
+        assert!(html.contains(&format!(
+            "<span id=\"trace-order-label\">{}</span>",
+            l.text("Timeline order", "时间线顺序")
+        )));
+        assert!(html.contains("aria-labelledby=\"trace-order-label\" name=\"traceOrder\""));
+        assert!(html.contains("value=\"newest_first\" selected"));
+        assert!(!html.contains("synthetic visible prompt"));
+        s.dispatch(Action::Filter("traceOrder", "oldest_first".into()));
+        let draft = render(s);
+        assert!(draft.contains(l.text("Unsubmitted edits", "尚有未提交的编辑")));
+        assert!(draft.contains("value=\"oldest_first\" selected"));
+        assert!(draft.contains(&format!(
+            "<span class=\"state-label\">{}</span>",
+            TraceOrder::NewestFirst.label(l)
+        )));
+    }
+}
+
+#[test]
+fn trace_insight_bounds_are_independent_and_never_change_overall_totals() {
+    for l in [Language::English, Language::Chinese] {
+        for (flag, class, text) in [
+            (
+                "threadsTruncated",
+                "trace-threads-truncated",
+                l.text("first 500 thread IDs", "前 500 个会话 ID"),
+            ),
+            (
+                "requestedSettingsTruncated",
+                "trace-settings-truncated",
+                l.text("first 500 in state/value", "前 500 个组合"),
+            ),
+            (
+                "daysTruncated",
+                "trace-days-truncated",
+                l.text("first 500 UTC days", "前 500 个 UTC 日期"),
+            ),
+        ] {
+            let mut s = state();
+            s.language = l;
+            assert!(!render(s.clone()).contains(class));
+            s.remotes.get_mut(&Slot::TraceSummary).unwrap().value[flag] = json!(true);
+            let html = render(s.clone());
+            assert!(html.contains(class));
+            assert!(html.contains(text));
+            assert!(html.contains(l.text(
+                "Overall totals include all matching records",
+                "总体总量包含全部匹配记录"
+            )));
+            assert!(html.contains("9,007,199,254,740,993,323"));
+            s.remotes.get_mut(&Slot::TraceSummary).unwrap().value[flag] = json!(false);
+            assert!(!render(s).contains(class));
+        }
+    }
+}
+
+#[test]
+fn trace_insight_empty_unknown_unsafe_and_local_identity_states_remain_explicit() {
+    use usage_lens_ui::trace_insights::*;
+    for l in [Language::English, Language::Chinese] {
+        for value in [Value::Null, json!(""), json!("not-a-number"), json!(12)] {
+            assert_eq!(trace_number(&value, l), l.text("Unknown", "未知"));
+        }
+        assert_eq!(trace_number(&json!("0"), l), "0");
+        assert_eq!(
+            trace_number(&json!("9007199254740993323"), l),
+            "9,007,199,254,740,993,323"
+        );
+        let mut data = fixture("summary");
+        for key in ["byThread", "byRequestedSettings", "byDay"] {
+            data[key] = json!([]);
+        }
+        let html = render_with(state(), |_, ui| {
+            view! { {trace_threads(&data, l, ui)} {trace_comparison(&data, false, l)} {trace_comparison(&data, true, l)} }.into_any()
+        });
+        assert!(html.contains(l.text("No retained thread evidence", "没有保留的会话证据")));
+        assert_eq!(
+            html.matches(l.text("No group evidence", "暂无分组证据"))
+                .count(),
+            2
+        );
+        assert!(!html.contains("<table"));
+        assert!(!html.contains("<button"));
+        let mut data = fixture("summary");
+        data["byRequestedSettings"][0]["request"] = json!({"model":{"state":"reported","value":"<img src=x onerror=alert(1)>"},"reasoningEffort":{"state":"invalid","value":null},"serviceTier":{"state":"not_reported","value":null}});
+        data["byRequestedSettings"][0]["totals"]["totalTokens"] = Value::Null;
+        data["byDay"][0]["date"] = json!("2026-10-03");
+        let html = render_with(state(), |_, _| {
+            view! { {trace_comparison(&data, false, l)} {trace_comparison(&data, true, l)} }
+                .into_any()
+        });
+        assert!(html.contains("&lt;img src=x onerror=alert(1)&gt;"));
+        assert!(!html.contains("<img"));
+        assert!(html.contains(l.text("Invalid", "无效")));
+        assert!(html.contains(l.text("Not reported", "未报告")));
+        assert!(html.contains(l.text("Unknown", "未知")));
+        assert!(html.contains("2026-10-03"));
+        assert!(!html.contains("2026-10-02"));
+        for source in [Value::Null, json!({"id":""})] {
+            data["source"] = source;
+            assert!(!render_with(state(), |_, ui| trace_threads(&data, l, ui)).contains("<button"));
+        }
+        data["source"] = json!({"id":"demo"});
+        for thread in [
+            Value::Null,
+            json!(""),
+            json!("bad thread"),
+            json!("<script>alert(1)</script>"),
+        ] {
+            data["byThread"][0]["threadId"] = thread;
+            let html = render_with(state(), |_, ui| trace_threads(&data, l, ui));
+            assert!(!html.contains("<button"));
+            assert!(!html.contains("<script"));
+        }
+        data["byThread"][0]["threadId"] = json!("safe-thread");
+        data["byThread"][0]["firstStartedAt"] = Value::Null;
+        data["byThread"][0]["totals"]["totalTokens"] = Value::Null;
+        assert!(
+            render_with(state(), |_, ui| trace_threads(&data, l, ui))
+                .contains(l.text("Unknown", "未知"))
+        );
+    }
+}
+
+#[test]
+fn trace_clock_anomalies_are_visible_without_inventing_latency_or_reassigning_days() {
+    use usage_lens_ui::trace_insights::trace_clock_warning;
+    for l in [Language::English, Language::Chinese] {
+        for count in [Value::Null, json!(""), json!("0"), json!("000")] {
+            assert!(
+                !render_with(state(), |_, _| trace_clock_warning(&count, l))
+                    .contains("trace-clock-anomaly")
+            );
+        }
+        let mut s = state();
+        s.language = l;
+        assert!(!render(s.clone()).contains("class=\"notice trace-clock-anomaly\""));
+        s.remotes.get_mut(&Slot::Traces).unwrap().value["attempts"][0]["timestampAnomaly"] =
+            json!(true);
+        let summary = &mut s.remotes.get_mut(&Slot::TraceSummary).unwrap().value;
+        summary["timestampAnomalyCount"] = json!("1");
+        summary["byThread"][0]["timestampAnomalyCount"] = json!("1");
+        summary["byRequestedSettings"][0]["timestampAnomalyCount"] = json!("1");
+        summary["byDay"][0]["timestampAnomalyCount"] = json!("1");
+        let html = render(s.clone());
+        assert!(html.contains(l.text(
+            "Clock anomaly: recorded completion precedes start",
+            "时钟异常：记录的完成时间早于开始时间"
+        )));
+        assert!(html.contains(l.text(
+            "stay in their recorded UTC start day",
+            "仍归入其记录的 UTC 开始日期"
+        )));
+        s.selected = fixture("attempt");
+        s.remotes.get_mut(&Slot::TraceDetail).unwrap().value["attempt"]["timestampAnomaly"] =
+            json!(true);
+        let detail = render_with(s.clone(), trace_detail);
+        assert!(detail.contains(l.text(
+            "Do not interpret these timestamps as request latency",
+            "请勿将这些时间戳解释为请求延迟"
+        )));
+        s.remotes.remove(&Slot::TraceDetail);
+        s.selected["timestampAnomaly"] = json!(true);
+        assert!(render_with(s, trace_detail).contains("trace-clock-anomaly"));
     }
 }

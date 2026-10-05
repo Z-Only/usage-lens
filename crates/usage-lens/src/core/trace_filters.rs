@@ -20,6 +20,35 @@ pub(super) const FILTER_SQL: &str = "a.source_id=?1
     AND (?7 IS NULL OR (json_extract(a.payload,'$.request.reasoningEffort.state')='reported' AND json_extract(a.payload,'$.request.reasoningEffort.value')=?7 COLLATE BINARY))
     AND (?8 IS NULL OR (json_extract(a.payload,'$.request.serviceTier.state')='reported' AND json_extract(a.payload,'$.request.serviceTier.value')=?8 COLLATE BINARY))";
 
+#[derive(Clone, Copy)]
+pub(super) enum TraceOrder {
+    NewestFirst,
+    OldestFirst,
+}
+impl TraceOrder {
+    pub(super) fn parse(input: Option<&Value>) -> CoreResult<Self> {
+        match input {
+            None => Ok(Self::NewestFirst),
+            Some(value) => match enum_value(value, &["newest_first", "oldest_first"])?.as_str() {
+                "oldest_first" => Ok(Self::OldestFirst),
+                _ => Ok(Self::NewestFirst),
+            },
+        }
+    }
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            Self::NewestFirst => "newest_first",
+            Self::OldestFirst => "oldest_first",
+        }
+    }
+    pub(super) fn sql(self) -> (&'static str, &'static str) {
+        match self {
+            Self::NewestFirst => ("<", "DESC"),
+            Self::OldestFirst => (">", "ASC"),
+        }
+    }
+}
+
 pub(super) struct TraceFilters {
     from: Option<String>,
     to: Option<String>,
@@ -71,6 +100,7 @@ impl TraceFilters {
         &self,
         input: Option<&Value>,
         source: &str,
+        order: TraceOrder,
     ) -> CoreResult<Option<(String, String)>> {
         let Some(input) = input else { return Ok(None) };
         let text = input.as_str().ok_or_else(|| error("invalid_input"))?;
@@ -85,18 +115,28 @@ impl TraceFilters {
             .decode(text)
             .map_err(|_| error("invalid_input"))?;
         let value: Value = serde_json::from_slice(&decoded).map_err(|_| error("invalid_input"))?;
-        exact_keys(&value, &["sourceId", "kind", "filters", "at", "key"])?;
+        exact_keys(
+            &value,
+            &["sourceId", "kind", "filters", "at", "key", "order"],
+        )?;
         require(
             value["sourceId"] == source
                 && value["kind"] == "traces"
-                && value["filters"] == self.fingerprint(),
+                && value["filters"] == self.fingerprint()
+                && value["order"] == order.name(),
         )?;
         Ok(Some((timestamp(&value["at"])?, identifier(&value["key"])?)))
     }
 
-    pub(super) fn encode_cursor(&self, source: &str, at: &str, key: &str) -> String {
+    pub(super) fn encode_cursor(
+        &self,
+        source: &str,
+        at: &str,
+        key: &str,
+        order: TraceOrder,
+    ) -> String {
         URL_SAFE_NO_PAD.encode(
-            json!({"sourceId":source,"kind":"traces","filters":self.fingerprint(),"at":at,"key":key})
+            json!({"sourceId":source,"kind":"traces","filters":self.fingerprint(),"at":at,"key":key,"order":order.name()})
                 .to_string(),
         )
     }
