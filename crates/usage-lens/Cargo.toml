@@ -17,7 +17,7 @@ base64 = "=0.23.1"
 chrono = { version = "=0.4.45", features = ["serde"] }
 clap = { version = "=4.6.7", features = ["derive"] }
 getrandom = "=0.4.3"
-libc = "=0.2.189"
+libc = "=0.2.190"
 form_urlencoded = "=1.2.2"
 percent-encoding = "=2.3.2"
 url = "=2.5.8"
@@ -28,7 +28,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision", "preserve_order"] }
 sha2 = "=0.11.0"
 thiserror = "=2.0.21"
-tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "net", "signal", "io-std", "io-util", "process", "time", "sync", "fs"] }
+tokio = { version = "=1.53.2", features = ["rt-multi-thread", "macros", "net", "signal", "io-std", "io-util", "process", "time", "sync", "fs"] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "=1.1.5", features = ["fs"] }

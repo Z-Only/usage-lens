@@ -15,7 +15,7 @@ ssr = ["leptos/ssr"]
 csr = ["leptos/csr", "dep:wasm-bindgen-futures", "dep:gloo-net"]
 
 [dependencies]
-leptos = { version = "=0.8.21", default-features = false }
+leptos = { version = "=0.8.22", default-features = false }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["arbitrary_precision"] }
 chrono = { version = "=0.4.45", default-features = false, features = ["std"] }
